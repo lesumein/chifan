@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>치판 · 검색 링크 시험</title>
+<meta name="robots" content="noindex">
+<style>
+  body { margin: 0; padding: 16px; font: 16px/1.45 system-ui, -apple-system, Roboto, "Noto Sans KR", sans-serif; background: #FFF8F0; color: #2A211C; }
+  h1 { font-size: 20px; margin: 4px 0 8px; }
+  p { margin: 6px 0; font-size: 14px; color: #6a5a4e; }
+  label { display: block; font-weight: 700; margin-top: 12px; }
+  input { width: 100%; box-sizing: border-box; height: 44px; font-size: 18px; padding: 0 12px; border: 1.5px solid #EADFD3; border-radius: 10px; }
+  ol { padding: 0; list-style: none; counter-reset: n; }
+  li { background: #fff; border-radius: 12px; padding: 12px; margin: 10px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); counter-increment: n; }
+  li b::before { content: counter(n) ". "; color: #C2462E; }
+  a.go { display: block; margin-top: 8px; text-align: center; background: #C2462E; color: #fff; font-weight: 700; text-decoration: none; padding: 11px; border-radius: 10px; }
+  code { display: block; font-size: 12px; word-break: break-all; color: #7a6a5e; margin-top: 4px; }
+  .tag { font-size: 12px; font-weight: 700; padding: 1px 6px; border-radius: 6px; background: #FFE9B8; color: #8A5A00; }
+  .bad { background: #eee; color: #777; }
+</style>
+</head>
+<body>
+<h1>검색 링크 시험 (안드로이드)</h1>
+<p>메이퇀 앱에 검색어를 바로 넘기는 형식을 찾기 위한 시험 페이지예요. 공식 문서는 없고, 공개된 URL 스킴 모음에 나온 형식들이에요.</p>
+<p>위에서부터 하나씩 눌러 보고, <b>검색 결과가 바로 뜬 번호</b>를 알려 주세요. 다른 앱이 뜨거나 아무 일도 없으면 그냥 뒤로 오면 돼요.</p>
+
+<label for="q">시험할 검색어</label>
+<input id="q" value="麻辣烫" lang="zh-CN">
+
+<ol id="list"></ol>
+
+<p><a href="./">← 치판으로 돌아가기</a></p>
+
+<script>
+  // 각 후보: 이름, 출처 신뢰도, 링크 만들기
+  var PKG = 'com.sankuai.meituan';
+  var C = [
+    ['배달 앱 검색 형식 (메이퇀 앱으로)', '여러 목록에 공통',
+      function (q) { return 'intent://waimai.meituan.com/search?query=' + q + '#Intent;scheme=meituanwaimai;package=' + PKG + ';end'; }],
+    ['배달 앱 검색 형식 (폰이 알아서 고름)', '여러 목록에 공통',
+      function (q) { return 'meituanwaimai://waimai.meituan.com/search?query=' + q; }],
+    ['메이퇀 앱 검색, query 파라미터', '변형',
+      function (q) { return 'intent://www.meituan.com/search?query=' + q + '#Intent;scheme=imeituan;package=' + PKG + ';end'; }],
+    ['메이퇀 앱 검색, keyword 형식', '한 곳에만 나옴 (신뢰 낮음)',
+      function (q) { return 'intent://search?keyword=' + q + '#Intent;scheme=imeituan;package=' + PKG + ';end'; }],
+    ['mtwm 형식', '한 곳에만 나옴 (신뢰 낮음)',
+      function (q) { return 'mtwm://waimai.meituan.com/search?query=' + q; }],
+    ['이미 시험함: 메이퇀 앱 search?q=', '첫 화면만 열림 (2026-10-28)',
+      function (q) { return 'intent://www.meituan.com/search?q=' + q + '#Intent;scheme=imeituan;package=' + PKG + ';end'; }, true]
+  ];
+
+  function render() {
+    var q = encodeURIComponent(document.getElementById('q').value.trim() || '麻辣烫');
+    var ol = document.getElementById('list');
+    ol.innerHTML = '';
+    C.forEach(function (c) {
+      var url = c[2](q);
+      var li = document.createElement('li');
+      li.innerHTML = '<b></b> <span class="tag"></span><code></code><a class="go">눌러서 시험</a>';
+      li.querySelector('b').textContent = c[0];
+      li.querySelector('.tag').textContent = c[1];
+      if (c[3]) li.querySelector('.tag').classList.add('bad');
+      li.querySelector('code').textContent = decodeURIComponent(url);
+      li.querySelector('a').href = url;
+      ol.appendChild(li);
+    });
+  }
+  document.getElementById('q').addEventListener('input', render);
+  render();
+</script>
+</body>
+</html>

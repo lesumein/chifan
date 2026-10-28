@@ -77,6 +77,9 @@
 그래서 [앱으로 열기]는 앱만 열고, 검색어는 클립보드 붙여넣기로 넘긴다. (메이퇀 페이지나 앱 코드는 분석하지 않음.
 다른 형식을 찾으면 `js/config.js`의 `searchPath`에 넣고 폰에서 다시 확인)
 
+**검색 링크 시험 페이지:** `lab.html` (https://lesumein.github.io/chifan/lab.html). 공개 URL 스킴 모음에 나온 후보
+(`meituanwaimai://waimai.meituan.com/search?query=` 등)를 폰에서 한 번씩 눌러 보는 페이지. 되는 형식이 나오면 `js/config.js`에 반영한다.
+
 실제 폰에서 확인되면 `js/config.js` 값을 고치고 `enabled: true`로 바꾼 뒤, 이 표에 날짜와 기기를 적는다.
 (메이퇀 페이지나 앱 코드를 분석해서 알아내지 않는다. 폰에서 직접 확인한다.)
 
