@@ -89,6 +89,15 @@
     toast(msg, 3200);
   }
 
+  function openInstall() {
+    var term = (window.CHIFAN_CONFIG.install || {}).searchTerm || '美团';
+    copyText(term).then(function (ok) {
+      Opener.openInstall();
+      toast(ok ? '복사됨: <b lang="zh-CN">' + esc(term) + '</b> · 스토어에서 바로 안 보이면 검색창에 붙여넣기'
+               : '스토어에서 <b lang="zh-CN">' + esc(term) + '</b>를 검색하세요', 4000);
+    });
+  }
+
   // ---------- 검색 ----------
   function score(f, q, qpy) {
     var best = -1;
@@ -250,6 +259,10 @@
         '<li>검색창을 길게 눌러 <b>붙여넣기</b> 하면 끝.</li>' +
       '</ol>' +
       '<p>' + openState + '</p>' +
+      '<h3>배달앱이 없다면</h3>' +
+      '<p>먼저 메이퇀 앱을 설치하세요. 아이폰은 중국 지역 Apple ID가 있어야 보일 수 있어요. ' +
+      '설치 전에는 [메이퇀에서 열기]가 웹페이지로 열려요.</p>' +
+      '<div class="row"><button class="btn" data-act="installApp">메이퇀 앱 설치하기</button></div>' +
       '<h3>홈 화면에 추가</h3>' +
       '<p>안드로이드 크롬: 오른쪽 위 ⋮ → <b>홈 화면에 추가</b><br>아이폰 사파리: 공유 버튼 → <b>홈 화면에 추가</b><br>한 번 열어 두면 인터넷 없이도 메뉴를 볼 수 있어요.</p>' +
       (S.installEvt ? '<div class="row"><button class="btn primary" data-act="install">지금 설치하기</button></div>' : '') +
@@ -367,6 +380,8 @@
     });
 
     $('#openBtn').addEventListener('click', openApp);
+    $('#installBtn').addEventListener('click', openInstall);
+    $('#setupDone').addEventListener('click', function () { LS.set('setupDone', true); $('#setupCard').hidden = true; });
     $('#aboutBtn').addEventListener('click', showAbout);
     $('#sheetClose').addEventListener('click', closeSheet);
     $('#sheetBack').addEventListener('click', closeSheet);
@@ -382,6 +397,8 @@
       else if (act === 'pick') pickPhoto(false);
       else if (act === 'rmphoto' && f) {
         Photos.remove(f.id).then(function () { delete S.photos[f.id]; showFood(f); renderGrid(); toast('사진을 지웠어요'); });
+      } else if (act === 'installApp') {
+        openInstall();
       } else if (act === 'install' && S.installEvt) {
         S.installEvt.prompt(); S.installEvt = null; closeSheet();
       }
@@ -431,6 +448,7 @@
   function init() {
     bind();
     inAppBanner();
+    $('#setupCard').hidden = !!LS.get('setupDone', false);
     Promise.all([loadJSON('data/categories.json'), loadJSON('data/foods.json'), loadJSON('data/requests.json')])
       .then(function (r) {
         S.cats = r[0]; S.foods = r[1]; S.req = r[2];

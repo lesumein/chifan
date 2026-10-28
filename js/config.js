@@ -20,5 +20,18 @@ window.CHIFAN_CONFIG = {
       url: 'imeituan://',        // 미확인
       fallbackMs: 1600           // 이 시간 안에 페이지가 숨겨지지 않으면 H5로
     }
+  },
+
+  // 배달앱 설치 링크. 스토어 링크가 안 맞으면 사용자가 searchTerm을 스토어 검색창에 붙여넣는다.
+  install: {
+    searchTerm: '美团',          // 설치 버튼을 누르면 함께 복사됨
+    android: {
+      market: 'market://details?id=com.sankuai.meituan',  // 패키지명 미확인. 중국 폰 제조사 스토어도 market://을 받음
+      web: 'https://play.google.com/store/apps/details?id=com.sankuai.meituan', // market://이 안 열릴 때
+      fallbackMs: 1600
+    },
+    ios: {
+      url: 'https://apps.apple.com/cn/app/id423084029'    // 앱 ID 미확인. 중국 지역 Apple ID가 필요할 수 있음
+    }
   }
 };

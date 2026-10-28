@@ -35,6 +35,16 @@
 
 <main>
   <section id="view-menu" class="view">
+    <div class="setup" id="setupCard" hidden>
+      <div class="setup-text">
+        <b>처음이라면: 메이퇀 앱부터 설치하세요</b>
+        <span>버튼을 누르면 스토어가 열리고 <span lang="zh-CN">美团</span>(앱 이름)이 복사돼요. 바로 안 보이면 스토어 검색창에 붙여넣기.</span>
+      </div>
+      <div class="setup-actions">
+        <button class="btn primary" id="installBtn">앱 설치하기</button>
+        <button class="btn" id="setupDone">이미 있어요</button>
+      </div>
+    </div>
     <div class="searchbar">
       <input id="q" type="search" inputmode="search" autocomplete="off"
              placeholder="한국어로 검색 (예: 마라탕, ㅉㅈㅁ)" aria-label="메뉴 검색">

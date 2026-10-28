@@ -27,6 +27,8 @@ async function run(browser, name, dev) {
   await ctx.addInitScript(() => {
     window.__opened = [];
     window.open = (u) => { window.__opened.push(u); return {}; };
+    window.__went = [];
+    window.__chifanGo = (u) => { window.__went.push(u); };
   });
   const page = await ctx.newPage();
   const errors = [];
@@ -37,6 +39,22 @@ async function run(browser, name, dev) {
   await page.goto(BASE);
   await page.waitForSelector('.card');
   await shot('01-home');
+
+  // 0) 첫 실행: 배달앱 설치 안내 → 스토어 열기 + '美团' 복사, [이미 있어요]로 숨김
+  assert.ok(await page.isVisible('#setupCard'));
+  await page.click('#installBtn');
+  await page.waitForSelector('.toast.is-on');
+  assert.strictEqual(await page.evaluate(() => navigator.clipboard.readText()), '美团');
+  if (name === 'pixel7') {
+    assert.deepStrictEqual(await page.evaluate(() => window.__went), ['market://details?id=com.sankuai.meituan']);
+    await page.waitForTimeout(1800); // 스토어 앱이 안 열리면 Play 웹으로
+    assert.deepStrictEqual(await page.evaluate(() => window.__went.slice(1)), ['https://play.google.com/store/apps/details?id=com.sankuai.meituan']);
+  } else {
+    assert.deepStrictEqual(await page.evaluate(() => window.__went), ['https://apps.apple.com/cn/app/id423084029']);
+  }
+  await shot('00-install');
+  await page.click('#setupDone');
+  assert.ok(!(await page.isVisible('#setupCard')));
 
   // 1) 카드 탭 → 자동 복사 + 토스트
   await page.click('[data-cat="soup"]');
@@ -83,6 +101,7 @@ async function run(browser, name, dev) {
   await shot('05-photo');
   await page.reload();
   await page.waitForSelector('.card[data-id="dandanmian"] .art.has-photo'); // 새로고침 뒤에도 남아 있음
+  assert.ok(!(await page.isVisible('#setupCard')), '설치 안내는 [이미 있어요] 뒤 다시 안 나옴');
 
   // 5) 요청사항 문구
   await page.click('.tab[data-view="memo"]');
@@ -122,6 +141,7 @@ async function inApp(browser) {
   await page.goto(BASE);
   await page.waitForSelector('.card');
   assert.ok(await page.isVisible('#inappBanner'));
+  await page.click('#setupDone');
   await page.screenshot({ path: path.join(out, 'pixel7-08-inapp.png') });
   await ctx.close();
   console.log('✓ 인앱 브라우저 안내');
