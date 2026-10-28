@@ -1,0 +1,54 @@
+{
+  "groups": [
+    {"id": "spice",    "ko": "맵기"},
+    {"id": "remove",   "ko": "빼 주세요"},
+    {"id": "taste",    "ko": "간·기름"},
+    {"id": "drink",    "ko": "음료"},
+    {"id": "pack",     "ko": "포장·수저"},
+    {"id": "delivery", "ko": "배달"},
+    {"id": "diet",     "ko": "알레르기·식성"}
+  ],
+  "items": [
+    {"id": "no-spicy",    "group": "spice",    "ko": "안 맵게",           "zh": "不要辣", "excl": "spice"},
+    {"id": "less-spicy",  "group": "spice",    "ko": "덜 맵게",           "zh": "少辣", "excl": "spice"},
+    {"id": "mild-spicy",  "group": "spice",    "ko": "살짝 맵게",         "zh": "微辣", "excl": "spice"},
+    {"id": "extra-spicy", "group": "spice",    "ko": "아주 맵게",         "zh": "特辣", "excl": "spice"},
+    {"id": "less-ma",     "group": "taste",    "ko": "산초(얼얼함) 적게", "zh": "少放花椒", "excl": "huajiao"},
+
+    {"id": "no-coriander","group": "remove",   "ko": "고수 빼고",         "zh": "不要香菜"},
+    {"id": "no-scallion", "group": "remove",   "ko": "파 빼고",           "zh": "不要葱"},
+    {"id": "no-garlic",   "group": "remove",   "ko": "마늘 빼고",         "zh": "不要蒜"},
+    {"id": "no-ginger",   "group": "remove",   "ko": "생강 빼고",         "zh": "不要姜"},
+    {"id": "no-onion",    "group": "remove",   "ko": "양파 빼고",         "zh": "不要洋葱"},
+    {"id": "no-sichuan",  "group": "remove",   "ko": "산초 빼고",         "zh": "不要花椒", "excl": "huajiao"},
+
+    {"id": "less-oil",    "group": "taste",    "ko": "기름 적게",         "zh": "少油"},
+    {"id": "less-salt",   "group": "taste",    "ko": "덜 짜게",           "zh": "少盐"},
+    {"id": "no-msg",      "group": "taste",    "ko": "MSG 빼고",          "zh": "不要味精"},
+    {"id": "sauce-side",  "group": "taste",    "ko": "소스 따로",         "zh": "酱料分开放"},
+    {"id": "soup-side",   "group": "taste",    "ko": "국물 따로 포장",    "zh": "汤和面分开装"},
+
+    {"id": "less-ice",    "group": "drink",    "ko": "얼음 적게",         "zh": "少冰", "excl": "temp"},
+    {"id": "no-ice",      "group": "drink",    "ko": "얼음 빼고",         "zh": "去冰", "excl": "temp"},
+    {"id": "hot-drink",   "group": "drink",    "ko": "따뜻하게",          "zh": "热的", "excl": "temp"},
+    {"id": "half-sugar",  "group": "drink",    "ko": "당도 50%",          "zh": "半糖", "excl": "sugar"},
+    {"id": "no-sugar",    "group": "drink",    "ko": "설탕 넣지 말고",    "zh": "不另外加糖", "excl": "sugar"},
+
+    {"id": "no-cutlery",  "group": "pack",     "ko": "수저 필요 없음",    "zh": "不需要餐具", "excl": "cutlery"},
+    {"id": "two-cutlery", "group": "pack",     "ko": "수저 2개",          "zh": "需要两套餐具", "excl": "cutlery"},
+    {"id": "more-napkin", "group": "pack",     "ko": "휴지 더 주세요",    "zh": "多给点纸巾"},
+
+    {"id": "door",        "group": "delivery", "ko": "문 앞에 두기",      "zh": "放门口就行"},
+    {"id": "call",        "group": "delivery", "ko": "도착하면 전화",     "zh": "到了请打电话"},
+    {"id": "no-knock",    "group": "delivery", "ko": "노크·초인종 X",    "zh": "请不要敲门"},
+    {"id": "locker",      "group": "delivery", "ko": "배달함에 넣어 주세요","zh": "放外卖柜"},
+    {"id": "downstairs",  "group": "delivery", "ko": "1층에서 받을게요",  "zh": "送到楼下，我下来拿"},
+    {"id": "korean-only", "group": "delivery", "ko": "중국어 서툴러요, 문자 주세요", "zh": "我中文不太好，有事请发短信"},
+
+    {"id": "peanut",      "group": "diet",     "ko": "땅콩 알레르기",     "zh": "我对花生过敏"},
+    {"id": "seafood",     "group": "diet",     "ko": "해산물 알레르기",   "zh": "我对海鲜过敏"},
+    {"id": "no-pork",     "group": "diet",     "ko": "돼지고기 빼고",     "zh": "不要猪肉"},
+    {"id": "no-offal",    "group": "diet",     "ko": "내장 빼고",         "zh": "不要内脏"},
+    {"id": "thanks",      "group": "delivery",     "ko": "감사합니다 (끝인사)", "zh": "谢谢"}
+  ]
+}

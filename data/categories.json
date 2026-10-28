@@ -1,0 +1,12 @@
+[
+  {"id": "noodle",   "ko": "면",          "zh": "面食",     "emoji": "🍜", "color": "#E8833A"},
+  {"id": "soup",     "ko": "탕·훠궈",     "zh": "汤锅火锅", "emoji": "🍲", "color": "#D9473B"},
+  {"id": "rice",     "ko": "밥·덮밥",     "zh": "米饭盖饭", "emoji": "🍚", "color": "#C9A13B"},
+  {"id": "bbq",      "ko": "꼬치·바베큐", "zh": "烧烤串串", "emoji": "🍢", "color": "#A2502E"},
+  {"id": "dumpling", "ko": "만두·딤섬",   "zh": "饺子点心", "emoji": "🥟", "color": "#B88A5A"},
+  {"id": "stirfry",  "ko": "볶음요리",    "zh": "炒菜",     "emoji": "🥘", "color": "#C2603F"},
+  {"id": "snack",    "ko": "분식·간식",   "zh": "小吃",     "emoji": "🥞", "color": "#D68C45"},
+  {"id": "fastfood", "ko": "패스트푸드",  "zh": "快餐西餐", "emoji": "🍔", "color": "#B9563E"},
+  {"id": "dessert",  "ko": "디저트·음료", "zh": "甜品饮品", "emoji": "🧋", "color": "#B5707F"},
+  {"id": "korean",   "ko": "중국 속 한식", "zh": "韩餐",    "emoji": "🍱", "color": "#4F7F9A"}
+]
