@@ -63,6 +63,7 @@
     var q = f.q || f.zh;
     return copyText(q).then(function (ok) {
       S.lastCopied = f;
+      LS.set('lastCopied', f.id);
       S.recent = [f.id].concat(S.recent.filter(function (id) { return id !== f.id; })).slice(0, 24);
       LS.set('recent', S.recent);
       if (ok) toast('복사됨: <b lang="zh-CN">' + esc(q) + '</b>');
@@ -86,7 +87,9 @@
       ? '검색창을 길게 눌러 <b>붙여넣기</b> 하세요'
       : '먼저 메뉴 카드를 눌러 검색어를 복사해 두면 편해요';
     if (mode === 'app' && how === 'h5' && Opener.env.inApp) msg = '앱 안 브라우저라 웹으로 열었어요. ' + msg;
-    else if (how !== 'h5') msg = '앱이 안 열리면 웹으로 넘어가요. ' + msg;
+    else if (how !== 'h5') msg = S.lastCopied
+      ? '<b lang="zh-CN">' + esc(S.lastCopied.q || S.lastCopied.zh) + '</b> 검색으로 앱을 열어요. 결과가 안 뜨면 검색창에 붙여넣기'
+      : '앱이 안 열리면 웹으로 넘어가요. ' + msg;
     toast(msg, 3200);
   }
 
@@ -460,6 +463,8 @@
         S.foods.forEach(function (f) { S.foodById[f.id] = f; });
         if (!S.catById[S.cat] && S.cat !== 'recent') S.cat = S.cats[0].id;
         S.recent = S.recent.filter(function (id) { return S.foodById[id]; });
+        S.lastCopied = S.foodById[LS.get('lastCopied', '')] || null;
+        updateDock();
         renderCats();
         renderMemo();
         return Photos.keys().then(function (keys) {

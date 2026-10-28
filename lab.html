@@ -46,8 +46,11 @@
       function (q) { return 'intent://search?keyword=' + q + '#Intent;scheme=imeituan;package=' + PKG + ';end'; }],
     ['mtwm 형식', '한 곳에만 나옴 (신뢰 낮음)',
       function (q) { return 'mtwm://waimai.meituan.com/search?query=' + q; }],
-    ['이미 시험함: 메이퇀 앱 search?q=', '첫 화면만 열림 (2026-10-28)',
-      function (q) { return 'intent://www.meituan.com/search?q=' + q + '#Intent;scheme=imeituan;package=' + PKG + ';end'; }, true]
+    ['메이퇀 앱 search?q=', '2026-10-28 검색 결과 뜸',
+      function (q) { return 'intent://www.meituan.com/search?q=' + q + '#Intent;scheme=imeituan;package=' + PKG + ';end'; }],
+    ['위와 같음 + 앱 없을 때 웹으로 (치판 [앱으로 열기]와 똑같은 링크)', '확인용',
+      function (q) { return 'intent://www.meituan.com/search?q=' + q + '#Intent;scheme=imeituan;package=' + PKG +
+        ';S.browser_fallback_url=' + encodeURIComponent('https://h5.waimai.meituan.com/waimai/mindex/home') + ';end'; }]
   ];
 
   function render() {

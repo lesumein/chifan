@@ -65,7 +65,8 @@
 | H5 주소 | `https://h5.waimai.meituan.com/waimai/mindex/home` | 이 클라우드 환경에서 접속만 확인 (해외 IP라 가게 목록은 안 뜸) | 2026-10 |
 | 안드로이드 패키지명 | `com.sankuai.meituan` | **확인됨** (설치·실행) | 2026-10-28 / 사용자 안드로이드 폰 |
 | 안드로이드 intent scheme / path | `imeituan` / (빈칸) | **확인됨** ([앱으로 열기] → 앱 실행) | 2026-10-28 / 사용자 안드로이드 폰 |
-| 검색어 넘기기 | `imeituan://www.meituan.com/search?q={검색어}` (커뮤니티 URL 스킴 목록의 형식) | **안 됨** — 앱 첫 화면만 열림. 설정에서 뺌 | 2026-10-28 / 사용자 안드로이드 폰 |
+| 검색어 넘기기 (안드로이드) | `imeituan://www.meituan.com/search?q={검색어}` (커뮤니티 URL 스킴 목록의 형식) | **확인됨** — lab.html 6번으로 검색 결과가 뜸. (처음 시험 땐 첫 화면만: 새로고침으로 복사 검색어가 사라졌던 탓으로 보임, 저장하도록 고침) | 2026-10-28 / 사용자 안드로이드 폰 |
+| 검색어 넘기기 (iOS) | 같은 형식 | **미확인** | — |
 | iOS URL 스킴 | `imeituan://` | **미확인 (추정)** | — |
 | 설치: 안드로이드 스토어 | `market://details?id=com.sankuai.meituan` → 1.6초 안에 안 열리면 Google Play 웹 | **미확인** (패키지명 추정) | — |
 | 설치: iOS App Store | `https://apps.apple.com/cn/app/id423084029` | **미확인** (앱 ID 추정, 중국 지역 Apple ID 필요할 수 있음) | — |
@@ -73,9 +74,9 @@
 설치 링크가 틀려도 `美团`이 복사돼 있으니 스토어 검색창에 붙여넣으면 된다. Google Play는 중국 안에서 안 열리고, 중국 폰(샤오미·화웨이 등)은 `market://`을 자기 스토어로 연다.
 
 **2026-10-28 실기기 확인 (안드로이드):** [앱 설치하기] → 설치됨, [앱으로 열기] → 메이퇀 앱 실행됨. 앱 첫 화면만 열 때는 검색어가 안 들어감.
-공개된 URL 스킴 모음에 나온 검색 경로(`imeituan://www.meituan.com/search?q=`)도 시험했지만 앱 첫 화면만 열렸다.
-그래서 [앱으로 열기]는 앱만 열고, 검색어는 클립보드 붙여넣기로 넘긴다. (메이퇀 페이지나 앱 코드는 분석하지 않음.
-다른 형식을 찾으면 `js/config.js`의 `searchPath`에 넣고 폰에서 다시 확인)
+공개된 URL 스킴 모음에 나온 후보를 `lab.html`로 하나씩 시험한 결과, 메이퇀 앱 `search?q=` 형식만 검색 결과를 열었다
+(`meituanwaimai://…/search?query=`, `query=`, `keyword=`, `mtwm://`는 안 됨). [앱으로 열기]는 마지막으로 복사한 검색어를 이 형식으로 넘긴다.
+안 되더라도 앱은 열리고 검색어는 클립보드에 있으므로 붙여넣기로 이어진다. (메이퇀 페이지나 앱 코드는 분석하지 않음)
 
 **검색 링크 시험 페이지:** `lab.html` (https://lesumein.github.io/chifan/lab.html). 공개 URL 스킴 모음에 나온 후보
 (`meituanwaimai://waimai.meituan.com/search?query=` 등)를 폰에서 한 번씩 눌러 보는 페이지. 되는 형식이 나오면 `js/config.js`에 반영한다.

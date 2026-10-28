@@ -17,13 +17,14 @@ window.CHIFAN_CONFIG = {
       path: '',                  // 비워 두면 앱 첫 화면
       package: 'com.sankuai.meituan', // 확인됨 2026-10-28 (설치·실행)
       // 복사한 검색어가 있을 때 쓰는 경로. {q} = 검색어(URL 인코딩). 비워 두면 앱 첫 화면만 연다.
-      // 시도했으나 안 됨: 'www.meituan.com/search?q={q}' → 첫 화면만 열림 (2026-10-28, 안드로이드 실기기)
-      searchPath: ''
+      // 2026-10-28 안드로이드 실기기: lab.html 6번(이 형식)으로 검색 결과가 뜸.
+      // (처음 시험 땐 첫 화면만 열렸는데, 새로고침으로 복사한 검색어가 사라졌던 탓으로 보임 → 이제 저장해 둠)
+      searchPath: 'www.meituan.com/search?q={q}'
     },
 
     ios: {
       url: 'imeituan://',        // 미확인
-      searchUrl: '',             // 안드로이드에서 search?q= 형식이 안 됐으므로 비워 둠
+      searchUrl: 'imeituan://www.meituan.com/search?q={q}', // 미확인 (안드로이드에서 된 형식과 같게)
       fallbackMs: 1600           // 이 시간 안에 페이지가 숨겨지지 않으면 H5로
     }
   },

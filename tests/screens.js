@@ -71,10 +71,12 @@ async function run(browser, name, dev) {
   await page.evaluate(() => { window.__went = []; });
   await page.click('#openAppBtn');
   if (name === 'pixel7') {
+    // 복사한 검색어(麻辣烫)를 앱 검색 경로로 넘긴다
     assert.deepStrictEqual(await page.evaluate(() => window.__went),
-      ['intent://#Intent;scheme=imeituan;package=com.sankuai.meituan;S.browser_fallback_url=' + encodeURIComponent(H5) + ';end']);
+      ['intent://www.meituan.com/search?q=' + encodeURIComponent('麻辣烫') +
+       '#Intent;scheme=imeituan;package=com.sankuai.meituan;S.browser_fallback_url=' + encodeURIComponent(H5) + ';end']);
   } else {
-    const ios = 'imeituan://';
+    const ios = 'imeituan://www.meituan.com/search?q=' + encodeURIComponent('麻辣烫');
     assert.deepStrictEqual(await page.evaluate(() => window.__went), [ios]);
     await page.waitForTimeout(1800); // 앱이 안 열리면 웹으로
     assert.deepStrictEqual(await page.evaluate(() => window.__went), [ios, H5]);
@@ -112,6 +114,7 @@ async function run(browser, name, dev) {
   await shot('05-photo');
   await page.reload();
   await page.waitForSelector('.card[data-id="dandanmian"] .art.has-photo'); // 새로고침 뒤에도 남아 있음
+  assert.match(await page.textContent('#dockText'), /麻辣烫/, '새로고침 뒤에도 마지막 복사한 검색어 유지');
   assert.ok(!(await page.isVisible('#setupCard')), '설치 안내는 [이미 있어요] 뒤 다시 안 나옴');
 
   // 5) 요청사항 문구
