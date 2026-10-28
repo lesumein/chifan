@@ -64,10 +64,20 @@ async function run(browser, name, dev) {
   assert.strictEqual(await page.evaluate(() => navigator.clipboard.readText()), '麻辣烫');
   await shot('02-copied');
 
-  // 2) [메이퇀에서 열기] → 설정상 H5만 (사용자 탭에서만)
+  // 2) 열기: 로드 시 자동 이동 없음. [웹] → H5, [앱으로 열기] → 폰 종류 자동 인식 후 앱 시도, 안 되면 H5
   assert.deepStrictEqual(await page.evaluate(() => window.__opened), [], '로드 시 자동으로 열면 안 됨');
-  await page.click('#openBtn');
+  await page.click('#openWebBtn');
   assert.deepStrictEqual(await page.evaluate(() => window.__opened), [H5]);
+  await page.evaluate(() => { window.__went = []; });
+  await page.click('#openAppBtn');
+  if (name === 'pixel7') {
+    assert.deepStrictEqual(await page.evaluate(() => window.__went),
+      ['intent://#Intent;scheme=imeituan;package=com.sankuai.meituan;S.browser_fallback_url=' + encodeURIComponent(H5) + ';end']);
+  } else {
+    assert.deepStrictEqual(await page.evaluate(() => window.__went), ['imeituan://']);
+    await page.waitForTimeout(1800); // 앱이 안 열리면 웹으로
+    assert.deepStrictEqual(await page.evaluate(() => window.__went), ['imeituan://', H5]);
+  }
 
   // 3) 한국어 검색: 초성 / 부분 / 입력 중
   const search = async q => {
@@ -141,6 +151,7 @@ async function inApp(browser) {
   await page.goto(BASE);
   await page.waitForSelector('.card');
   assert.ok(await page.isVisible('#inappBanner'));
+  assert.ok(!(await page.isVisible('#openAppBtn')), '앱 안 브라우저에서는 [앱으로 열기] 숨김');
   await page.click('#setupDone');
   await page.screenshot({ path: path.join(out, 'pixel7-08-inapp.png') });
   await ctx.close();

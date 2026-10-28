@@ -80,12 +80,13 @@
   }
 
   // ---------- 앱 열기 ----------
-  function openApp() {
-    var how = Opener.openDelivery();
+  function openApp(mode) {
+    var how = Opener.openDelivery(mode);
     var msg = S.lastCopied
       ? '검색창을 길게 눌러 <b>붙여넣기</b> 하세요'
       : '먼저 메뉴 카드를 눌러 검색어를 복사해 두면 편해요';
-    if (how === 'h5' && Opener.env.inApp) msg = '앱 안 브라우저라 웹페이지로 열었어요. ' + msg;
+    if (mode === 'app' && how === 'h5' && Opener.env.inApp) msg = '앱 안 브라우저라 웹으로 열었어요. ' + msg;
+    else if (how !== 'h5') msg = '앱이 안 열리면 웹으로 넘어가요. ' + msg;
     toast(msg, 3200);
   }
 
@@ -227,7 +228,8 @@
       (f.check ? '<p class="note">이 중국어 표기는 아직 확인 중이에요. 검색 결과가 이상하면 비슷한 이름으로도 찾아보세요.</p>' : '') +
       '<div class="row">' +
         '<button class="btn primary" data-act="copy">검색어 복사</button>' +
-        '<button class="btn" data-act="open">메이퇀에서 열기</button>' +
+        (Opener.canTryApp() ? '<button class="btn" data-act="openApp">앱으로 열기</button>' : '') +
+        '<button class="btn" data-act="openWeb">웹으로 열기</button>' +
       '</div>' +
       '<div class="row">' +
         '<button class="btn" data-act="camera">📷 사진 찍기</button>' +
@@ -247,21 +249,21 @@
   }
 
   function showAbout() {
-    var cfg = window.CHIFAN_CONFIG, app = cfg.appOpen || {};
-    var openState = app.enabled
-      ? '앱 열기: 켜짐 (안드로이드 intent / iOS 스킴, 실패 시 웹페이지)'
-      : '앱 열기: <b>웹페이지(H5)만</b> 엽니다. 앱 주소가 실제 폰에서 확인되면 앱으로 바로 열 수 있게 바꿀 예정이에요.';
+    var env = Opener.env;
+    var openState = Opener.canTryApp()
+      ? '이 폰은 <b>' + (env.ios ? '아이폰' : '안드로이드') + '</b>으로 알아봤어요. [앱으로 열기]는 앱을 먼저 시도하고, 안 열리면 웹으로 넘어가요. 앱 주소는 아직 확인 중이에요.'
+      : (env.inApp ? '앱 안 브라우저에서는 웹으로만 열 수 있어요.' : '이 기기에서는 웹으로 열어요.');
     openSheet(
       '<h2>치판은 이런 앱이에요</h2>' +
       '<ol class="steps">' +
         '<li>메뉴 카드를 누르면 중국어 검색어가 <b>복사</b>돼요.</li>' +
-        '<li><b>[메이퇀에서 열기]</b>를 눌러 배달앱(또는 웹페이지)을 열어요.</li>' +
+        '<li><b>[앱으로 열기]</b> 또는 <b>[웹]</b>을 눌러 메이퇀을 열어요.</li>' +
         '<li>검색창을 길게 눌러 <b>붙여넣기</b> 하면 끝.</li>' +
       '</ol>' +
       '<p>' + openState + '</p>' +
       '<h3>배달앱이 없다면</h3>' +
       '<p>먼저 메이퇀 앱을 설치하세요. 아이폰은 중국 지역 Apple ID가 있어야 보일 수 있어요. ' +
-      '설치 전에는 [메이퇀에서 열기]가 웹페이지로 열려요.</p>' +
+      '앱이 없으면 [앱으로 열기]를 눌러도 웹으로 넘어가요.</p>' +
       '<div class="row"><button class="btn" data-act="installApp">메이퇀 앱 설치하기</button></div>' +
       '<h3>홈 화면에 추가</h3>' +
       '<p>안드로이드 크롬: 오른쪽 위 ⋮ → <b>홈 화면에 추가</b><br>아이폰 사파리: 공유 버튼 → <b>홈 화면에 추가</b><br>한 번 열어 두면 인터넷 없이도 메뉴를 볼 수 있어요.</p>' +
@@ -379,7 +381,9 @@
       }
     });
 
-    $('#openBtn').addEventListener('click', openApp);
+    $('#openAppBtn').addEventListener('click', function () { openApp('app'); });
+    $('#openWebBtn').addEventListener('click', function () { openApp('web'); });
+    $('#openAppBtn').hidden = !Opener.canTryApp();
     $('#installBtn').addEventListener('click', openInstall);
     $('#setupDone').addEventListener('click', function () { LS.set('setupDone', true); $('#setupCard').hidden = true; });
     $('#aboutBtn').addEventListener('click', showAbout);
@@ -392,7 +396,7 @@
       if (!b) return;
       var act = b.getAttribute('data-act'), f = S.sheetFood;
       if (act === 'copy' && f) copyFood(f);
-      else if (act === 'open') { closeSheet(); openApp(); }
+      else if (act === 'openApp' || act === 'openWeb') { closeSheet(); openApp(act === 'openApp' ? 'app' : 'web'); }
       else if (act === 'camera') pickPhoto(true);
       else if (act === 'pick') pickPhoto(false);
       else if (act === 'rmphoto' && f) {

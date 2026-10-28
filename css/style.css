@@ -250,3 +250,6 @@ body.no-dock .toast { bottom: calc(env(safe-area-inset-bottom) + 24px); }
 .setup-text span { font-size: 14px; color: var(--muted); }
 .setup-actions { display: flex; gap: 8px; margin-top: 10px; }
 .setup-actions .btn.primary { flex: 1; }
+
+.dock-btns { display: flex; gap: 6px; flex: none; }
+.dock-btns .btn { padding: 11px 13px; }

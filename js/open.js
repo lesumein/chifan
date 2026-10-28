@@ -41,10 +41,11 @@
     go(url);
   }
 
+  // mode: 'app' = 앱 시도 후 안 되면 웹, 'web' = 웹만.
   // 어떤 방식으로 열었는지 돌려준다: 'h5' | 'android-intent' | 'ios-scheme'
-  function openDelivery() {
+  function openDelivery(mode) {
     var cfg = window.CHIFAN_CONFIG, h5 = cfg.h5Url, app = cfg.appOpen || {};
-    if (!app.enabled || env.inApp) { openH5(h5); return 'h5'; }
+    if (mode !== 'app' || !app.enabled || env.inApp) { openH5(h5); return 'h5'; }
     if (env.android && app.android && app.android.package) { go(androidIntent(app.android, h5)); return 'android-intent'; }
     if (env.ios && app.ios && app.ios.url) { tryThen(app.ios.url, h5, app.ios.fallbackMs); return 'ios-scheme'; }
     openH5(h5);
@@ -61,5 +62,11 @@
     return 'web-store';
   }
 
-  window.Opener = { env: env, openDelivery: openDelivery, openInstall: openInstall, androidIntent: androidIntent };
+  // 앱 열기를 시도할 수 있는 폰인가 (안드로이드·아이폰, 앱 안 브라우저 제외)
+  function canTryApp() {
+    var app = window.CHIFAN_CONFIG.appOpen || {};
+    return !!app.enabled && !env.inApp && (env.android || env.ios);
+  }
+
+  window.Opener = { env: env, canTryApp: canTryApp, openDelivery: openDelivery, openInstall: openInstall, androidIntent: androidIntent };
 })();
