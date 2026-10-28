@@ -126,6 +126,25 @@ async function run(browser, name, dev) {
   await shot('06-memo');
   await page.click('.tab[data-view="menu"]');
 
+  // 5-1) 중국어 읽기: 붙여넣은 글에 뜻 달기, 한국어로 단어장 찾기
+  await page.click('.tab[data-view="read"]');
+  await page.fill('#readIn', '招牌麻辣烫(含米饭) 辣度:微辣 加料:鸡蛋 去冰 半糖');
+  const toks = await page.$$eval('#readOut .tk', els => els.map(e => e.querySelector('.tk-zh').textContent + '=' + e.querySelector('.tk-ko').textContent));
+  for (const w of ['招牌=대표 메뉴', '麻辣烫=마라탕 🌶🌶', '含米饭=밥 포함', '辣度=맵기', '微辣=살짝 맵게', '加料=토핑 추가', '鸡蛋=달걀', '去冰=얼음 빼고', '半糖=당도 50%'])
+    assert.ok(toks.includes(w), `${w} 없음: ${toks.join(', ')}`);
+  await shot('08-read');
+  await page.click('.tk[data-food="malatang"]');
+  await page.waitForSelector('.sheet.is-on');
+  await page.click('#sheetClose');
+  await page.waitForTimeout(250);
+  await page.fill('#readIn', '당도');
+  const gl = await page.$$eval('.gl .gl-zh', els => els.map(e => e.textContent));
+  assert.ok(gl.includes('甜度') && gl.includes('半糖'), gl.join(','));
+  await page.fill('#readIn', '');
+  await page.click('[data-gg="option"]');
+  await shot('09-gloss');
+  await page.click('.tab[data-view="menu"]');
+
   // 6) 정보 시트
   await page.click('#aboutBtn');
   await page.waitForTimeout(250);

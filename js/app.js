@@ -11,6 +11,7 @@
 
   var S = {
     foods: [], cats: [], catById: {}, foodById: {}, req: { groups: [], items: [] },
+    gloss: { groups: [], items: [] }, glossGroup: 'option', dict: null, dictMax: 1,
     cat: LS.get('cat', 'noodle'), query: '',
     recent: LS.get('recent', []), memo: LS.get('memo', []),
     photos: {}, lastCopied: null, sheetFood: null
@@ -331,6 +332,75 @@
     renderMemo();
   }
 
+
+  // ---------- 중국어 읽기 ----------
+  // 단어장·메뉴·요청사항을 합쳐 사전을 만든다. 같은 표기는 메뉴 > 요청사항 > 단어장 순으로 덮어쓴다.
+  function buildDict() {
+    var d = {}, max = 1;
+    function add(zh, v) { d[zh] = v; if (zh.length > max) max = zh.length; }
+    S.gloss.items.forEach(function (g) { add(g.zh, { ko: g.ko }); });
+    S.req.items.forEach(function (r) { add(r.zh, { ko: r.ko }); });
+    S.foods.forEach(function (f) {
+      add(f.zh, { ko: f.ko + (f.spicy ? ' ' + SPICE[f.spicy] : ''), food: f.id });
+      if (f.q && f.q !== f.zh) add(f.q, { ko: f.ko, food: f.id });
+    });
+    S.dict = d; S.dictMax = max;
+  }
+
+  // 가장 긴 단어부터 맞춰 나간다. 결과: [{t: 글자, v: 뜻 또는 null}]
+  function annotate(text) {
+    var out = [], i = 0, chars = Array.from(text);
+    while (i < chars.length) {
+      var hit = null;
+      for (var n = Math.min(S.dictMax, chars.length - i); n >= 1; n--) {
+        var w = chars.slice(i, i + n).join('');
+        if (S.dict[w]) { hit = { t: w, v: S.dict[w] }; i += n; break; }
+      }
+      if (hit) out.push(hit);
+      else {
+        var last = out[out.length - 1];
+        if (last && !last.v) last.t += chars[i]; else out.push({ t: chars[i], v: null });
+        i++;
+      }
+    }
+    return out;
+  }
+
+  function hasHangul(s) { return /[가-힣ㄱ-ㆎ]/.test(s); }
+
+  function renderRead() {
+    var v = $('#readIn').value.trim(), out = $('#readOut');
+    if (!v || hasHangul(v)) { out.hidden = true; out.innerHTML = ''; renderGloss(); return; }
+    var toks = annotate(v), known = 0;
+    out.innerHTML = toks.map(function (t) {
+      if (!t.v) return '<span class="plain" lang="zh-CN">' + esc(t.t) + '</span>';
+      known++;
+      return '<span class="tk' + (t.v.food ? ' is-food' : '') + '"' + (t.v.food ? ' data-food="' + esc(t.v.food) + '" role="button" tabindex="0"' : '') + '>' +
+        '<span class="tk-zh" lang="zh-CN">' + esc(t.t) + '</span><span class="tk-ko">' + esc(t.v.ko) + '</span></span>';
+    }).join('');
+    if (!known) out.innerHTML += '<p class="hint">아는 단어를 못 찾았어요. 화면 번역을 써 보세요.</p>';
+    out.hidden = false;
+    renderGloss();
+  }
+
+  function renderGloss() {
+    var q = $('#readIn').value.trim(), list = S.gloss.items, box = $('#glossList');
+    var filtering = q && hasHangul(q);
+    var cats = $('#glossCats');
+    cats.innerHTML = '';
+    S.gloss.groups.forEach(function (g) {
+      var on = !filtering && S.glossGroup === g.id;
+      cats.appendChild(h('button', { class: 'cat' + (on ? ' is-on' : ''), role: 'tab', 'aria-selected': String(on), 'data-gg': g.id, style: '--c:#C2462E' }, esc(g.ko)));
+    });
+    if (filtering) {
+      var nq = Hangul.norm(q);
+      list = list.filter(function (g) { return Hangul.find(Hangul.norm(g.ko), nq) >= 0; });
+    } else list = list.filter(function (g) { return g.group === S.glossGroup; });
+    box.innerHTML = list.length ? list.map(function (g) {
+      return '<button class="gl" data-zh="' + esc(g.zh) + '"><span class="gl-zh" lang="zh-CN">' + esc(g.zh) + '</span><span class="gl-ko">' + esc(g.ko) + '</span></button>';
+    }).join('') : '<p class="empty">단어장에 없어요.</p>';
+  }
+
   // ---------- 화면 전환 ----------
   function setView(v) {
     document.querySelectorAll('.tab').forEach(function (t) {
@@ -339,6 +409,7 @@
     });
     $('#view-menu').hidden = v !== 'menu';
     $('#view-memo').hidden = v !== 'memo';
+    $('#view-read').hidden = v !== 'read';
     $('#dock').hidden = v !== 'menu';
     document.body.classList.toggle('no-dock', v !== 'menu');
     window.scrollTo(0, 0);
@@ -421,6 +492,34 @@
       }).catch(function () { toast('사진을 저장하지 못했어요'); });
     });
 
+    $('#readIn').addEventListener('input', renderRead);
+    $('#readPaste').addEventListener('click', function () {
+      var fail = function () { $('#readIn').focus(); toast('입력칸을 길게 눌러 붙여넣기 해 주세요'); };
+      if (!navigator.clipboard || !navigator.clipboard.readText) return fail();
+      navigator.clipboard.readText().then(function (t) {
+        if (!t) return fail();
+        $('#readIn').value = t; renderRead();
+      }, fail);
+    });
+    $('#readClear').addEventListener('click', function () { $('#readIn').value = ''; renderRead(); $('#readIn').focus(); });
+    $('#readOut').addEventListener('click', function (e) {
+      var t = e.target.closest('[data-food]');
+      if (t) showFood(S.foodById[t.getAttribute('data-food')]);
+    });
+    $('#glossCats').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-gg]');
+      if (!b) return;
+      S.glossGroup = b.getAttribute('data-gg');
+      if (hasHangul($('#readIn').value)) $('#readIn').value = '';
+      renderGloss();
+    });
+    $('#glossList').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-zh]');
+      if (!b) return;
+      var zh = b.getAttribute('data-zh');
+      copyText(zh).then(function (ok) { if (ok) toast('복사됨: <b lang="zh-CN">' + esc(zh) + '</b>'); });
+    });
+
     $('#memoGroups').addEventListener('click', function (e) {
       var b = e.target.closest('[data-req]');
       if (b) toggleReq(b.getAttribute('data-req'));
@@ -456,9 +555,9 @@
     bind();
     inAppBanner();
     $('#setupCard').hidden = !!LS.get('setupDone', false);
-    Promise.all([loadJSON('data/categories.json'), loadJSON('data/foods.json'), loadJSON('data/requests.json')])
+    Promise.all([loadJSON('data/categories.json'), loadJSON('data/foods.json'), loadJSON('data/requests.json'), loadJSON('data/glossary.json')])
       .then(function (r) {
-        S.cats = r[0]; S.foods = r[1]; S.req = r[2];
+        S.cats = r[0]; S.foods = r[1]; S.req = r[2]; S.gloss = r[3];
         S.cats.forEach(function (c) { S.catById[c.id] = c; });
         S.foods.forEach(function (f) { S.foodById[f.id] = f; });
         if (!S.catById[S.cat] && S.cat !== 'recent') S.cat = S.cats[0].id;
@@ -467,6 +566,8 @@
         updateDock();
         renderCats();
         renderMemo();
+        buildDict();
+        renderGloss();
         return Photos.keys().then(function (keys) {
           keys.forEach(function (k) { S.photos[k] = true; });
           if (keys.length) renderGrid();
@@ -489,6 +590,6 @@
     }
   }
 
-  window.ChifanApp = { searchFoods: searchFoods, memoText: memoText, state: S };
+  window.ChifanApp = { searchFoods: searchFoods, memoText: memoText, annotate: function (t) { return annotate(t); }, state: S };
   init();
 })();

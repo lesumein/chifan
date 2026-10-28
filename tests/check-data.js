@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path');
 const root = path.join(__dirname, '..');
 const read = p => JSON.parse(fs.readFileSync(path.join(root, p), 'utf8'));
-const cats = read('data/categories.json'), foods = read('data/foods.json'), req = read('data/requests.json');
+const cats = read('data/categories.json'), foods = read('data/foods.json'), req = read('data/requests.json'), gloss = read('data/glossary.json');
 const errs = [];
 const catIds = new Set(cats.map(c => c.id));
 const ids = new Set();
@@ -24,6 +24,16 @@ for (const r of req.items) {
   if (rids.has(r.id)) errs.push(`요청사항 id 중복: ${r.id}`);
   rids.add(r.id);
 }
+const ggids = new Set(gloss.groups.map(g => g.id)), gzh = new Set();
+for (const g of gloss.items) {
+  if (!g.zh || !g.ko) errs.push(`단어장: 빈 칸 ${JSON.stringify(g)}`);
+  if (!ggids.has(g.group)) errs.push(`단어장 ${g.zh}: 없는 그룹 ${g.group}`);
+  if (gzh.has(g.zh)) errs.push(`단어장 중복: ${g.zh}`);
+  gzh.add(g.zh);
+}
+const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+for (const f of ['data/categories.json', 'data/foods.json', 'data/requests.json', 'data/glossary.json'])
+  if (!sw.includes(`'${f}'`)) errs.push(`sw.js 캐시 목록에 ${f} 없음`);
 if (foods.length < 100 || foods.length > 200) errs.push(`음식 개수 ${foods.length} (100~200 목표)`);
 for (const c of cats) if (!foods.some(f => f.cat === c.id)) errs.push(`빈 카테고리 ${c.id}`);
 
@@ -40,6 +50,6 @@ for (const file of walk(root).filter(f => /\.(html|css|js|json|webmanifest|svg)$
 }
 
 const byCat = Object.fromEntries(cats.map(c => [c.id, foods.filter(f => f.cat === c.id).length]));
-console.log(`음식 ${foods.length}개`, byCat, `/ 검증 필요 ${foods.filter(f => f.check).length}개 / 요청사항 ${req.items.length}개`);
+console.log(`음식 ${foods.length}개`, byCat, `/ 검증 필요 ${foods.filter(f => f.check).length}개 / 요청사항 ${req.items.length}개 / 단어장 ${gloss.items.length}개`);
 if (errs.length) { console.error(errs.join('\n')); process.exit(1); }
 console.log('OK');
