@@ -81,12 +81,14 @@
 
   // ---------- 앱 열기 ----------
   function openApp(mode) {
-    var how = Opener.openDelivery(mode);
+    var how = Opener.openDelivery(mode, S.lastCopied && (S.lastCopied.q || S.lastCopied.zh));
     var msg = S.lastCopied
       ? '검색창을 길게 눌러 <b>붙여넣기</b> 하세요'
       : '먼저 메뉴 카드를 눌러 검색어를 복사해 두면 편해요';
     if (mode === 'app' && how === 'h5' && Opener.env.inApp) msg = '앱 안 브라우저라 웹으로 열었어요. ' + msg;
-    else if (how !== 'h5') msg = '앱이 안 열리면 웹으로 넘어가요. ' + msg;
+    else if (how !== 'h5') msg = S.lastCopied
+      ? '검색 결과가 바로 안 뜨면 검색창에 <b>붙여넣기</b> 하세요'
+      : '앱이 안 열리면 웹으로 넘어가요. ' + msg;
     toast(msg, 3200);
   }
 

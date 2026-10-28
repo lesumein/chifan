@@ -71,12 +71,15 @@ async function run(browser, name, dev) {
   await page.evaluate(() => { window.__went = []; });
   await page.click('#openAppBtn');
   if (name === 'pixel7') {
+    // 복사한 검색어(麻辣烫)를 앱 검색 경로로 넘긴다
     assert.deepStrictEqual(await page.evaluate(() => window.__went),
-      ['intent://#Intent;scheme=imeituan;package=com.sankuai.meituan;S.browser_fallback_url=' + encodeURIComponent(H5) + ';end']);
+      ['intent://www.meituan.com/search?q=' + encodeURIComponent('麻辣烫') +
+       '#Intent;scheme=imeituan;package=com.sankuai.meituan;S.browser_fallback_url=' + encodeURIComponent(H5) + ';end']);
   } else {
-    assert.deepStrictEqual(await page.evaluate(() => window.__went), ['imeituan://']);
+    const ios = 'imeituan://www.meituan.com/search?q=' + encodeURIComponent('麻辣烫');
+    assert.deepStrictEqual(await page.evaluate(() => window.__went), [ios]);
     await page.waitForTimeout(1800); // 앱이 안 열리면 웹으로
-    assert.deepStrictEqual(await page.evaluate(() => window.__went), ['imeituan://', H5]);
+    assert.deepStrictEqual(await page.evaluate(() => window.__went), [ios, H5]);
   }
 
   // 3) 한국어 검색: 초성 / 부분 / 입력 중

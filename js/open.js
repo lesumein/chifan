@@ -22,8 +22,11 @@
     else go(h5);
   }
 
-  function androidIntent(a, h5) {
-    return 'intent://' + (a.path || '') + '#Intent;scheme=' + a.scheme + ';package=' + a.package +
+  function withQ(tpl, q) { return tpl.replace('{q}', encodeURIComponent(q)); }
+
+  function androidIntent(a, h5, q) {
+    var p = q && a.searchPath ? withQ(a.searchPath, q) : (a.path || '');
+    return 'intent://' + p + '#Intent;scheme=' + a.scheme + ';package=' + a.package +
       ';S.browser_fallback_url=' + encodeURIComponent(h5) + ';end';
   }
 
@@ -43,11 +46,12 @@
 
   // mode: 'app' = 앱 시도 후 안 되면 웹, 'web' = 웹만.
   // 어떤 방식으로 열었는지 돌려준다: 'h5' | 'android-intent' | 'ios-scheme'
-  function openDelivery(mode) {
+  // q: 앱에 넘길 검색어(없으면 앱 첫 화면)
+  function openDelivery(mode, q) {
     var cfg = window.CHIFAN_CONFIG, h5 = cfg.h5Url, app = cfg.appOpen || {};
     if (mode !== 'app' || !app.enabled || env.inApp) { openH5(h5); return 'h5'; }
-    if (env.android && app.android && app.android.package) { go(androidIntent(app.android, h5)); return 'android-intent'; }
-    if (env.ios && app.ios && app.ios.url) { tryThen(app.ios.url, h5, app.ios.fallbackMs); return 'ios-scheme'; }
+    if (env.android && app.android && app.android.package) { go(androidIntent(app.android, h5, q)); return 'android-intent'; }
+    if (env.ios && app.ios && app.ios.url) { tryThen(q && app.ios.searchUrl ? withQ(app.ios.searchUrl, q) : app.ios.url, h5, app.ios.fallbackMs); return 'ios-scheme'; }
     openH5(h5);
     return 'h5';
   }
