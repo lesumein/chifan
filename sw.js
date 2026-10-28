@@ -1,5 +1,5 @@
 // 오프라인용 서비스워커. 파일을 바꾸면 VERSION을 올릴 것.
-var VERSION = 'chifan-v2';
+var VERSION = 'chifan-v3';
 var CORE = [
   './',
   'index.html',
@@ -21,7 +21,10 @@ var CORE = [
 ];
 
 self.addEventListener('install', function (e) {
-  e.waitUntil(caches.open(VERSION).then(function (c) { return c.addAll(CORE); }).then(function () { return self.skipWaiting(); }));
+  e.waitUntil(caches.open(VERSION).then(function (c) {
+    // HTTP 캐시에 남은 옛 파일을 받지 않도록 cache: 'reload'
+    return c.addAll(CORE.map(function (u) { return new Request(u, { cache: 'reload' }); }));
+  }).then(function () { return self.skipWaiting(); }));
 });
 
 self.addEventListener('activate', function (e) {
