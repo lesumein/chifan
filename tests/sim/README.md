@@ -20,3 +20,5 @@ python3 tests/sim/render.py shot.jpg shot.ocr.json out.png   # 라벨을 덮어 
 node tests/sim/shoot.js /tmp/fx            # 폰 크기로 캡처
 python3 tests/sim/batch.py /tmp/fx /tmp/fxout   # OCR → 라벨 → 덮어 그리기, sheet.png 와 못 붙인 줄 목록
 ```
+
+- `paragraph.py`: 두 줄로 접힌 이름을 한 문단으로 합치는 규칙 (`Paragraphs.kt`와 같아야 한다). `render.py`가 쓴다.

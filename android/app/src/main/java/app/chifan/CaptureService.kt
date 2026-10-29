@@ -195,7 +195,7 @@ class CaptureService : Service() {
                 if (used[i] || !near(fresh[i].bounds, old.bounds)) continue
                 // 같은 자리: 글자가 같으면 옛 것(자리째) 유지. 다르면 OCR이 매번 조금씩 다르게 읽은 것 — 더 긴(정보 많은) 쪽을 둔다
                 used[i] = true
-                out.add(if (fresh[i].text.length > old.text.length) OverlayView.Label(old.bounds, fresh[i].text, fresh[i].kind) else old)
+                out.add(if (fresh[i].text.length > old.text.length) OverlayView.Label(old.bounds, fresh[i].text, fresh[i].kind, fresh[i].rows) else old)
                 break
             }
         }
@@ -257,17 +257,24 @@ class CaptureService : Service() {
         val seen = ArrayList<Pair<String, String?>>()
         val lines = ArrayList<Pair<String, Rect>>()
         val useMt = Mt.ready && Prefs.mtOn(this)
+        val found = ArrayList<Pair<String, Paragraphs.Box>>()
         for (block in t.textBlocks) for (line in block.lines) for ((raw, box) in splitByGap(line)) {
             if (!hasHan(raw)) continue
             lines.add(raw to Rect(box))
+            found.add(raw to Paragraphs.Box(box.left, box.top, box.right, box.bottom))
+        }
+        // 두 줄로 접힌 이름은 합쳐서 읽는다 (Paragraphs)
+        for (p in Paragraphs.group(found)) {
+            val raw = p.text
+            val box = Rect(p.box.l, p.box.t, p.box.r, p.box.b)
             val r = labeler.label(raw)
             if (r?.text != null) {
-                out.add(OverlayView.Label(box, r.text, r.kind)); seen.add(raw to r.text)
+                out.add(OverlayView.Label(box, r.text, r.kind, p.n)); seen.add(raw to r.text)
             } else if (useMt) {
                 val lt = clean(raw)
                 val mt = Mt.cached(lt)
                 if (mt == null) { Mt.request(lt) { scheduleRebuild() }; seen.add(raw to r?.full) }
-                else if (mt.isNotEmpty()) { out.add(OverlayView.Label(box, mt, OverlayView.Label.MT)); seen.add(raw to "$mt ⟨번역⟩") }
+                else if (mt.isNotEmpty()) { out.add(OverlayView.Label(box, mt, OverlayView.Label.MT, p.n)); seen.add(raw to "$mt ⟨번역⟩") }
                 else seen.add(raw to r?.full)
             } else seen.add(raw to r?.full)
             if (out.size >= MAX_LABELS) break

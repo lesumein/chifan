@@ -11,7 +11,7 @@ import android.view.View
 /** 메이퇀 화면 위에 한국어 라벨을 그리는 전체 화면 뷰. 터치는 받지 않는다(아래 앱으로 그대로 통과). */
 class OverlayView(ctx: Context) : View(ctx) {
     /** kind: 0 사전, 1 메뉴 이름, 2 기계 번역, 3 한자음만 */
-    class Label(val bounds: Rect, val text: String, val kind: Int) {
+    class Label(val bounds: Rect, val text: String, val kind: Int, val rows: Int = 1) {
         companion object { const val DICT = 0; const val FOOD = 1; const val MT = 2; const val HANJA = 3 }
     }
 
@@ -62,25 +62,32 @@ class OverlayView(ctx: Context) : View(ctx) {
             val r = RectF(b.left - 3 * d, b.top - 2 * d, minOf(b.right + 3 * d, width.toFloat()), b.bottom + 2 * d)
             if (done.any { o -> val ix = maxOf(0f, minOf(r.right, o.right) - maxOf(r.left, o.left)); val iy = maxOf(0f, minOf(r.bottom, o.bottom) - maxOf(r.top, o.top)); ix * iy > 0.3f * r.width() * r.height() }) continue
             val avail = r.width() - 11 * d
-            var size = (b.height() * 0.72f).coerceIn(minSize, maxSize)
+            val rowH = b.height() / l.rows               // 두 줄로 접힌 이름은 줄 수만큼 나눠 덮는다
+            var size = (rowH * 0.72f).coerceIn(minSize, maxSize)
             coverText.textSize = size
-            var text = l.text
-            var w = coverText.measureText(text)
+            var rows = Paragraphs.splitLabel(l.text, l.rows)
+            var w = rows.maxOf { coverText.measureText(it) }
             // 안 들어가면 먼저 오른쪽 빈 자리(다음 글자 직전)까지 넓히고, 그래도 안 되면 글자를 줄인다
             if (w > avail) {
                 val extra = minOf(w - avail, limit - r.right)
                 if (extra > 0) r.right += extra
             }
-            var avail2 = r.width() - 11 * d
-            while (w > avail2 && size > minSize) { size -= 1 * d; coverText.textSize = size; w = coverText.measureText(text) }
-            while (coverText.measureText(text) > avail2 && text.length > 2) text = text.substring(0, text.length - 2) + "…"
+            val avail2 = r.width() - 11 * d
+            while (w > avail2 && size > minSize) { size -= 1 * d; coverText.textSize = size; w = rows.maxOf { coverText.measureText(it) } }
+            rows = rows.map { var t = it
+                // 안 들어가면 먼저 띄어쓰기를 빼 보고("월 0 판매"→"월0판매"), 그래도 안 되면 …로 자른다
+                if (coverText.measureText(t) > avail2 && ' ' in t && " · " !in t && coverText.measureText(t.replace(" ", "")) <= avail2) t = t.replace(" ", "")
+                while (coverText.measureText(t) > avail2 && t.length > 2) t = t.substring(0, t.length - 2) + "…"
+                t }
             done.add(r)
             c.drawRoundRect(r, radius, radius, coverBg)
             barPaint.color = when (l.kind) { Label.FOOD -> 0xFFA2502E.toInt(); Label.MT -> 0xFF3F5F7F.toInt(); Label.HANJA -> 0xFF9A9A9A.toInt(); else -> 0xFFC2462E.toInt() }
             c.drawRoundRect(RectF(r.left, r.top, r.left + 3 * d, r.bottom), 2 * d, 2 * d, barPaint)
             val fm = coverText.fontMetrics
-            val y = r.centerY() - (fm.ascent + fm.descent) / 2
-            c.drawText(text, r.left + 3 * d + 4 * d, y, coverText)
+            for ((i, t) in rows.withIndex()) {
+                val cy = r.top + 2 * d + rowH * (i + 0.5f)
+                c.drawText(t, r.left + 3 * d + 4 * d, cy - (fm.ascent + fm.descent) / 2, coverText)
+            }
             synchronized(drawn) { drawn.add(Rect((r.left + loc[0]).toInt(), (r.top + loc[1]).toInt(), (r.right + loc[0]).toInt(), (r.bottom + loc[1]).toInt())) }
         }
     }

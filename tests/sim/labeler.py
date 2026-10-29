@@ -33,8 +33,8 @@ class Dict:
 
 
 def strip_note(ko):
-    s = re.sub(r'\s*[(（][^)）]*[)）]', '', ko).strip()
-    return s or ko
+    """라벨용 뜻: 괄호 설명은 뗀다. 괄호뿐인 뜻("(메이퇀)")은 덮지 않는다 → ''"""
+    return re.sub(r'\s*[(（][^)）]*[)）]', '', ko).strip()
 
 
 # 숫자 규칙. 위에서부터 먼저 맞는 것. None 이면 그 자리엔 라벨 없이 지나감. 'keep' 이면 원문 그대로 둔다.
@@ -132,9 +132,11 @@ def label(dic, raw):
         hit = longest(dic, s, i)
         if hit:
             w, (short, ko, food) = hit
-            parts.append(strip_note(short).replace('🌶', '').strip()); kinds.append(FOOD if food else DICT)
-            if len(w) >= 2 or food or len(s) == 1:   # 한 글자 칩(热·大·小)은 줄 전체가 그 글자일 때만 인정
-                strong += 1
+            ko = strip_note(short).replace('🌶', '').strip()
+            if ko:
+                parts.append(ko); kinds.append(FOOD if food else DICT)
+                if len(w) >= 2 or food or len(s) == 1:   # 한 글자 칩(热·大·小)은 줄 전체가 그 글자일 때만 인정
+                    strong += 1
             i += len(w); continue
         i += 1   # 사전에 없는 한자: 건너뜀
     if not parts or strong == 0:

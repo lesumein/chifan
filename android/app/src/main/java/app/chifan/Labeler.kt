@@ -85,9 +85,12 @@ class Labeler(private val dict: Dict) {
             if (hit != null) {
                 flushHanja()
                 val ko = stripNote(hit.short).replace("🌶", "").trim()
-                parts.add(ko); fullParts.add(stripNote(hit.ko))
-                if (hit.zh.length >= 2 || hit.foodId != null || s.length == 1) strong++   // 한 글자 칩(热·大·小)은 줄 전체가 그 글자일 때만
-                if (hit.foodId != null) anyFood = true
+                fullParts.add(stripNote(hit.ko).ifEmpty { hit.ko })
+                if (ko.isNotEmpty()) {
+                    parts.add(ko)
+                    if (hit.zh.length >= 2 || hit.foodId != null || s.length == 1) strong++   // 한 글자 칩(热·大·小)은 줄 전체가 그 글자일 때만
+                    if (hit.foodId != null) anyFood = true
+                }
                 i += hit.zh.length; continue
             }
             dict.reading(c)?.let { hanja.append(it) }
@@ -101,8 +104,8 @@ class Labeler(private val dict: Dict) {
         return Result(text, full, kind)
     }
 
-    /** 라벨용 뜻: 괄호 설명은 뗀다 ("고명 (면 위 토핑)" → "고명") */
-    private fun stripNote(ko: String) = ko.replace(Regex("\\s*[(（][^)）]*[)）]"), "").trim().ifEmpty { ko }
+    /** 라벨용 뜻: 괄호 설명은 뗀다 ("고명 (면 위 토핑)" → "고명"). 괄호뿐인 뜻("(메이퇀)")은 덮지 않는다 → "" */
+    private fun stripNote(ko: String) = ko.replace(Regex("\\s*[(（][^)）]*[)）]"), "").trim()
 
     /**
      * s[i..]에서 사전에 있는 가장 긴 말. 한 글자짜리 말(满·减·元…)은 앞뒤에 한자가 없을 때만 —

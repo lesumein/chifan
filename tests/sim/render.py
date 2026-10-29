@@ -12,6 +12,15 @@ FONT = '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'
 BAR = {DICT: (194, 70, 46), FOOD: (162, 80, 46)}
 
 
+def _trim(draw, text, font, avail):
+    # 안 들어가면 먼저 띄어쓰기를 빼 보고("월 0 판매"→"월0판매"), 그래도 안 되면 …로 자른다
+    if ' ' in text and ' · ' not in text and draw.textlength(text.replace(' ', ''), font=font) <= avail:
+        return text.replace(' ', '')
+    while draw.textlength(text, font=font) > avail and len(text) > 2:
+        text = text[:-2] + '…'
+    return text
+
+
 def render(img_path, ocr_path, out_path, dp=None):
     img = Image.open(img_path).convert('RGB')
     W, H = img.size
@@ -21,26 +30,27 @@ def render(img_path, ocr_path, out_path, dp=None):
     draw = ImageDraw.Draw(img, 'RGBA')
     drawn = []
     report = []
-    boxes = [ln['box'] for ln in lines]
-    for ln in sorted(lines, key=lambda l: (l['box'][1], l['box'][0])):
-        l, t, r, b = ln['box']
+    from paragraph import group, split_label
+    paras = group(lines)
+    boxes = [p['box'] for p in paras]
+    for pr in sorted(paras, key=lambda p: (p['box'][1], p['box'][0])):
+        l, t, r, b = pr['box']
+        n = pr['n']; row_h = (b - t) / n
         # 오른쪽으로 넓힐 수 있는 한계: 같은 높이에 있는 다음 글자 상자 직전까지
         limit = W
         for o in boxes:
-            if o is ln['box']:
+            if o is pr['box']:
                 continue
             if o[0] >= r - 2 and not (o[3] < t or o[1] > b):
                 limit = min(limit, o[0] - 4 * dp)
-        res = label(dic, ln['text'])
-        report.append((ln['text'], res[0] if res else None))
+        res = label(dic, pr['text'])
+        report.append((pr['text'], res[0] if res else None))
         if not res:
             continue
         text, kind = res
-        bh, bw = b - t, r - l
-        if bh < 6 * dp or bw < 8 * dp:
+        if row_h < 6 * dp or (r - l) < 8 * dp:
             continue
         box = [l - 3 * dp, t - 2 * dp, min(r + 3 * dp, W), b + 2 * dp]
-        # 이미 덮은 상자와 30% 넘게 겹치면 건너뜀
         skip = False
         for d in drawn:
             ix = max(0, min(box[2], d[2]) - max(box[0], d[0])); iy = max(0, min(box[3], d[3]) - max(box[1], d[1]))
@@ -48,25 +58,25 @@ def render(img_path, ocr_path, out_path, dp=None):
                 skip = True; break
         if skip:
             continue
-        size = max(8 * dp, min(17 * dp, bh * 0.72))
+        rows = split_label(text, n)
+        size = max(8 * dp, min(17 * dp, row_h * 0.72))
         font = ImageFont.truetype(FONT, int(size))
         avail = (box[2] - box[0]) - 11 * dp
-        w = draw.textlength(text, font=font)
-        # 안 들어가면 먼저 오른쪽 빈 자리(다음 글자 직전)까지 넓히고, 그래도 안 되면 글자를 줄인다
+        w = max(draw.textlength(rw, font=font) for rw in rows)
         if w > avail:
             extra = min(w - avail, limit - box[2])
             if extra > 0:
                 box[2] += extra
             avail = (box[2] - box[0]) - 11 * dp
         while w > avail and size > 8 * dp:
-            size -= 1 * dp; font = ImageFont.truetype(FONT, int(size)); w = draw.textlength(text, font=font)
-        while draw.textlength(text, font=font) > avail and len(text) > 2:
-            text = text[:-2] + '…'
+            size -= 1 * dp; font = ImageFont.truetype(FONT, int(size)); w = max(draw.textlength(rw, font=font) for rw in rows)
+        rows = [rw if draw.textlength(rw, font=font) <= avail else _trim(draw, rw, font, avail) for rw in rows]
         draw.rounded_rectangle(box, radius=5 * dp, fill=(255, 253, 249, 247))
         draw.rounded_rectangle([box[0], box[1], box[0] + 3 * dp, box[3]], radius=2 * dp, fill=BAR[kind])
         asc, desc = font.getmetrics()
-        y = (box[1] + box[3]) / 2 - (asc - desc) / 2
-        draw.text((box[0] + 7 * dp, y), text, font=font, fill=(42, 33, 28))
+        for i, rw in enumerate(rows):
+            cy = box[1] + 2 * dp + row_h * (i + 0.5)
+            draw.text((box[0] + 7 * dp, cy - (asc - desc) / 2), rw, font=font, fill=(42, 33, 28))
         drawn.append(box)
     img.save(out_path)
     return report
