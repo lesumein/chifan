@@ -51,7 +51,8 @@ class CaptureService : Service() {
 
     private var width = 0; private var height = 0; private var dpi = 0
     private var lastCaptureAt = 0L
-    private var lastHash = 0L            // 라벨이 그려진 상태의 화면 해시 (이것과 같으면 아무것도 안 함)
+    private var lastGrid: IntArray? = null   // 라벨이 그려진 상태의 화면(축소 밝기 격자). 이것과 거의 같으면 아무것도 안 함
+    private var bigChange = false            // 화면이 크게 바뀜(스크롤·페이지 전환) → 옛 라벨을 다 버린다
     private var lastSig = ""             // 마지막 OCR 결과 서명 (같으면 라벨을 다시 그리지 않음)
     @Volatile private var busy = false
     @Volatile private var paused = false
@@ -178,28 +179,70 @@ class CaptureService : Service() {
                 recognize(bmp)
                 return
             }
-            val hash = frameHash(bmp)
-            if (settleNext) { settleNext = false; lastHash = hash; return }
-            if (hash == lastHash || busy || now - lastCaptureAt < 600) return
-            lastHash = hash
+            val g = grid(bmp)
+            if (settleNext) { settleNext = false; lastGrid = g; return }
+            val diff = diffRatio(lastGrid, g)
+            if (diff < 0.006f || busy || now - lastCaptureAt < 600) return   // 0.6% 미만(커서·아이콘 깜빡임)은 변화로 안 봄
+            bigChange = diff > 0.30f
+            lastGrid = g
             waitingClean = true; hideAt = now
             main.post { overlay?.visibility = android.view.View.INVISIBLE }
         } finally { img.close() }
     }
 
+    private class Tracked(val label: OverlayView.Label, var missing: Int)
+    private var tracked: MutableList<Tracked> = ArrayList()
+
+    /**
+     * 새 라벨을 기존 라벨과 맞춰 본다. 같은 글자가 거의 같은 자리에 있으면 기존 라벨(자리 포함)을 그대로 쓴다.
+     * OCR은 같은 화면도 매번 상자가 몇 px씩 달라서, 이 단계가 없으면 라벨이 계속 옮겨 다닌다.
+     * 한 번 안 읽힌 라벨은 한 바퀴 더 두었다가 지운다 (화면이 크게 바뀐 뒤에는 바로 다 버린다).
+     */
+    private fun merge(fresh: List<OverlayView.Label>): List<OverlayView.Label> {
+        if (bigChange) { tracked.clear(); bigChange = false }
+        val used = BooleanArray(fresh.size)
+        val out = ArrayList<Tracked>()
+        for (old in tracked) {
+            var idx = -1
+            for (i in fresh.indices) if (!used[i] && fresh[i].text == old.label.text && near(fresh[i].bounds, old.label.bounds)) { idx = i; break }
+            if (idx >= 0) { used[idx] = true; out.add(Tracked(old.label, 0)) }
+            else if (old.missing < 1) out.add(Tracked(old.label, old.missing + 1))
+        }
+        for (i in fresh.indices) if (!used[i]) out.add(Tracked(fresh[i], 0))
+        tracked = out
+        return out.map { it.label }.sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))
+    }
+
+    private fun near(a: Rect, b: Rect): Boolean {
+        val tol = (14 * resources.displayMetrics.density).toInt()
+        return Math.abs(a.left - b.left) <= tol && Math.abs(a.top - b.top) <= tol &&
+            Math.abs(a.right - b.right) <= tol * 2 && Math.abs(a.bottom - b.bottom) <= tol
+    }
+
     /** 라벨을 다시 그린다. 그 직후 들어올 프레임은 기준 화면으로만 쓴다. */
     private fun draw(labels: List<OverlayView.Label>, boxes: List<Rect>) {
         settleNext = true
-        overlay?.set(labels, boxes)
+        overlay?.set(merge(labels), boxes)
     }
 
-    /** 작게 줄인 그림의 픽셀을 합쳐 만든 값. 같으면 화면이 안 바뀐 것으로 본다. */
-    private fun frameHash(b: Bitmap): Long {
-        val s = Bitmap.createScaledBitmap(b, 24, 48, false)
-        val px = IntArray(24 * 48); s.getPixels(px, 0, 24, 0, 0, 24, 48)
-        var h = 1125899906842597L
-        for (p in px) h = h * 31 + (p shr 4 and 0x0F0F0F)
-        return h
+    /** 화면을 32×64 밝기 격자로 줄인다. 맨 위 4줄(상태바: 시계·배터리)은 비교에서 뺀다. */
+    private fun grid(b: Bitmap): IntArray {
+        val s = Bitmap.createScaledBitmap(b, 32, 64, true)
+        val px = IntArray(32 * 64); s.getPixels(px, 0, 32, 0, 0, 32, 64)
+        val g = IntArray(px.size)
+        for (i in px.indices) {
+            val p = px[i]
+            g[i] = if (i < 32 * 4) 0 else ((p shr 16 and 0xFF) * 3 + (p shr 8 and 0xFF) * 6 + (p and 0xFF)) / 10
+        }
+        return g
+    }
+
+    /** 바뀐 칸의 비율 (밝기 차 24 넘는 칸) */
+    private fun diffRatio(a: IntArray?, b: IntArray): Float {
+        if (a == null) return 1f
+        var n = 0
+        for (i in b.indices) if (Math.abs(a[i] - b[i]) > 24) n++
+        return n.toFloat() / b.size
     }
 
     private fun recognize(bmp: Bitmap) {
@@ -294,8 +337,8 @@ class CaptureService : Service() {
     }
 
     /** 창이 열려 있는 동안은 캡처를 쉰다 (우리 창을 읽지 않도록) */
-    fun setPaused(p: Boolean) { paused = p; if (p) overlay?.labels = emptyList() else { lastHash = 0; lastSig = "" } }
-    fun refreshNow() { overlay?.labels = emptyList(); lastHash = 0; lastSig = "" }
+    fun setPaused(p: Boolean) { paused = p; if (p) overlay?.labels = emptyList() else { lastGrid = null; lastSig = ""; tracked.clear() } }
+    fun refreshNow() { overlay?.labels = emptyList(); lastGrid = null; lastSig = ""; tracked.clear() }
 
     companion object {
         const val ACTION_STOP = "app.chifan.STOP"
