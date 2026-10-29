@@ -157,7 +157,7 @@ class Bubble(private val ctx: Context, private val wm: WindowManager, private va
 
         // 탭
         val tabs = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-        tabBtns = listOf("menu" to "메뉴 고르기", "memo" to "요청사항", "gloss" to "단어장").associate { (id, label) ->
+        tabBtns = listOf("menu" to "메뉴", "memo" to "요청사항", "gloss" to "단어장", "ocr" to "읽은 글자").associate { (id, label) ->
             val t = text(label, 15f, muted, bold = true).apply {
                 gravity = Gravity.CENTER; setPadding(0, dp(8), 0, dp(8))
                 setOnClickListener { tab = id; query = ""; search.setText(""); render() }
@@ -205,6 +205,7 @@ class Bubble(private val ctx: Context, private val wm: WindowManager, private va
         search.hint = when (tab) {
             "menu" -> "한국어로 찾기 (예: 마라탕, ㅉㅈㅁ)"
             "gloss" -> "단어 찾기 (예: 맵기, 당도, 加料)"
+            "ocr" -> "방금 화면에서 읽은 글자와 붙인 뜻"
             else -> "요청사항 찾기"
         }
         renderContent()
@@ -212,7 +213,7 @@ class Bubble(private val ctx: Context, private val wm: WindowManager, private va
 
     private fun renderContent() {
         content.removeAllViews()
-        when (tab) { "menu" -> renderMenu(); "memo" -> renderMemo(); else -> renderGloss() }
+        when (tab) { "menu" -> renderMenu(); "memo" -> renderMemo(); "ocr" -> renderOcr(); else -> renderGloss() }
     }
 
     // ---------- 메뉴 고르기 ----------
@@ -306,6 +307,26 @@ class Bubble(private val ctx: Context, private val wm: WindowManager, private va
             row.addView(text(g.zh, 19f, ink, bold = true), LinearLayout.LayoutParams(dp(110), ViewGroup.LayoutParams.WRAP_CONTENT))
             row.addView(text(g.ko, 14f, muted), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             content.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(5) })
+        }
+    }
+
+    // ---------- 읽은 글자 (OCR 결과 확인용) ----------
+    private fun renderOcr() {
+        val lines = CaptureService.instance?.lastOcr ?: emptyList()
+        content.addView(text("창을 열기 직전 화면에서 읽은 중국어예요. 뜻이 ‘—’인 줄은 사전에 없는 말이에요. [복사]해서 보내 주면 사전에 넣을 수 있어요.", 13f, muted))
+        content.addView(button("전부 복사", primary = true) {
+            copy(lines.joinToString("\n") { it.first + " → " + (it.second ?: "—") }, "읽은 글자 ${lines.size}줄 복사됨")
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        if (lines.isEmpty()) { content.addView(text("아직 읽은 글자가 없어요. 창을 닫고 화면을 조금 움직인 뒤 다시 열어 보세요.", 14f, muted).apply { setPadding(0, dp(16), 0, 0) }); return }
+        for ((zh, ko) in lines) {
+            val row = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                background = round(white, 10); setPadding(dp(12), dp(7), dp(12), dp(7))
+                setOnClickListener { copy(zh, "복사됨: $zh") }
+            }
+            row.addView(text(zh, 16f, ink, bold = true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            row.addView(text(ko ?: "—", 13f, if (ko == null) muted else accent), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            content.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) })
         }
     }
 

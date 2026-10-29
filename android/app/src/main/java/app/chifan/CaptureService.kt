@@ -165,9 +165,16 @@ class CaptureService : Service() {
             .addOnFailureListener { busy = false }
     }
 
-    /** OCR 결과 → 라벨. 줄 전체가 사전에 있으면 그 뜻, 아니면 단어별로, 그래도 없으면 줄 안에서 찾은 뜻들을 이어 붙인다. */
+    /** 마지막 OCR 결과 (읽은 줄 → 붙인 라벨, 없으면 null). 창의 '읽은 글자' 탭에서 보여 준다. */
+    @Volatile var lastOcr: List<Pair<String, String?>> = emptyList()
+
+    /**
+     * OCR 결과 → 라벨. 줄 전체가 사전에 있으면 그 뜻, 아니면 단어별로, 그래도 없으면 줄 안에서 찾은 뜻들을 이어 붙인다.
+     * 이어 붙일 때는 한 글자짜리(甜, 冰, 热…)는 버리고, 찾은 말이 한자의 절반도 못 덮으면 라벨을 안 붙인다 — 틀린 라벨보다 빈 게 낫다.
+     */
     private fun toLabels(t: Text): List<OverlayView.Label> {
         val out = ArrayList<OverlayView.Label>()
+        val seen = ArrayList<Pair<String, String?>>()
         val own = overlay?.labels?.map { it.bounds } ?: emptyList()   // 우리가 그린 라벨이 OCR에 다시 잡히는 것 방지
         for (block in t.textBlocks) for (line in block.lines) {
             val box = line.boundingBox ?: continue
@@ -175,21 +182,24 @@ class CaptureService : Service() {
             val lt = clean(line.text)
             if (!hasHan(lt)) continue
             val whole = dict.exact(lt)
-            if (whole != null) { out.add(OverlayView.Label(box, whole.ko, whole.foodId != null)); continue }
-            var hitElement = false
+            if (whole != null) { out.add(OverlayView.Label(box, whole.ko, whole.foodId != null)); seen.add(lt to whole.ko); continue }
+            val elLabels = ArrayList<String>()
             for (el in line.elements) {
                 val et = clean(el.text); val eb = el.boundingBox ?: continue
                 val h = dict.exact(et) ?: continue
-                out.add(OverlayView.Label(eb, h.ko, h.foodId != null)); hitElement = true
+                out.add(OverlayView.Label(eb, h.ko, h.foodId != null)); elLabels.add(h.ko)
             }
-            if (hitElement) continue
-            val hits = dict.annotate(lt)
-            if (hits.isEmpty()) continue
+            if (elLabels.isNotEmpty()) { seen.add(lt to elLabels.joinToString(" · ")); continue }
+            val hits = dict.annotate(lt).filter { it.zh.length >= 2 }
+            val han = lt.count { it in '\u3400'..'\u9FFF' }
+            if (hits.isEmpty() || hits.sumOf { it.zh.length } * 2 < han) { seen.add(lt to null); continue }
             val shown = hits.distinctBy { it.zh }.take(3)
             val s = shown.joinToString(" · ") { it.ko } + if (hits.size > 3) " …" else ""
             out.add(OverlayView.Label(box, s, shown.any { it.foodId != null }))
-            if (out.size >= MAX_LABELS) return out
+            seen.add(lt to s)
+            if (out.size >= MAX_LABELS) break
         }
+        lastOcr = seen
         return out
     }
 
