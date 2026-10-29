@@ -161,7 +161,10 @@ class CaptureService : Service() {
 
     private fun recognize(bmp: Bitmap) {
         recognizer.process(InputImage.fromBitmap(bmp, 0))
-            .addOnSuccessListener { t -> overlay?.labels = toLabels(t); busy = false }
+            .addOnSuccessListener { t ->
+                val boxes = t.textBlocks.flatMap { b -> b.lines.mapNotNull { it.boundingBox } }
+                overlay?.set(toLabels(t), boxes); busy = false
+            }
             .addOnFailureListener { busy = false }
     }
 
@@ -175,10 +178,11 @@ class CaptureService : Service() {
     private fun toLabels(t: Text): List<OverlayView.Label> {
         val out = ArrayList<OverlayView.Label>()
         val seen = ArrayList<Pair<String, String?>>()
-        val own = overlay?.labels?.map { it.bounds } ?: emptyList()   // 우리가 그린 라벨이 OCR에 다시 잡히는 것 방지
+        // 우리가 그린 라벨이 다음 캡처에서 다시 읽히는 것 방지: 라벨 자리를 절반 넘게 차지하는 줄은 버린다
+        val own = overlay?.drawnRects() ?: emptyList()
         for (block in t.textBlocks) for (line in block.lines) {
             val box = line.boundingBox ?: continue
-            if (own.any { Rect.intersects(it, box) && !hasHan(line.text) }) continue
+            if (own.any { overlapRatio(it, box) >= 0.5f }) continue
             val lt = clean(line.text)
             if (!hasHan(lt)) continue
             val whole = dict.exact(lt)
@@ -203,7 +207,15 @@ class CaptureService : Service() {
         return out
     }
 
-    private fun clean(s: String) = s.replace(Regex("[\\s:：,，.。()（）\\[\\]【】|/]"), "")
+    /** 한자·숫자·영문만 남긴다 (한글 라벨이 줄에 섞여 읽혀도 매칭이 깨지지 않게) */
+    private fun clean(s: String) = s.replace(Regex("[^\\u3400-\\u9FFF0-9A-Za-z]"), "")
+
+    private fun overlapRatio(a: Rect, line: Rect): Float {
+        val x = Rect()
+        if (!x.setIntersect(a, line)) return 0f
+        val area = line.width().toFloat() * line.height()
+        return if (area <= 0) 0f else x.width() * x.height() / area
+    }
     private fun hasHan(s: String) = s.any { it in '㐀'..'鿿' }
 
     private fun showOverlay() {
