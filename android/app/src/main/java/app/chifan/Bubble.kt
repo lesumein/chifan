@@ -314,9 +314,15 @@ class Bubble(private val ctx: Context, private val wm: WindowManager, private va
     private fun renderOcr() {
         val lines = CaptureService.instance?.lastOcr ?: emptyList()
         content.addView(text("창을 열기 직전 화면에서 읽은 중국어예요. 뜻이 ‘—’인 줄은 사전에 없는 말이에요. [복사]해서 보내 주면 사전에 넣을 수 있어요.", 13f, muted))
-        content.addView(button("전부 복사", primary = true) {
+        val btns = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+        btns.addView(button("전부 복사", primary = true) {
             copy(lines.joinToString("\n") { it.first + " → " + (it.second ?: "—") }, "읽은 글자 ${lines.size}줄 복사됨")
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        btns.addView(button("OCR 결과 복사(JSON)") {
+            val j = CaptureService.instance?.lastOcrJson() ?: "[]"
+            copy(j, "OCR 결과 ${lines.size}줄을 JSON으로 복사했어요. 화면 캡처와 함께 보내 주세요")
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(8) })
+        content.addView(btns, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
         if (lines.isEmpty()) { content.addView(text("아직 읽은 글자가 없어요. 창을 닫고 화면을 조금 움직인 뒤 다시 열어 보세요.", 14f, muted).apply { setPadding(0, dp(16), 0, 0) }); return }
         for ((zh, ko) in lines) {
             val row = LinearLayout(ctx).apply {

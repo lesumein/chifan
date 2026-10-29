@@ -45,27 +45,35 @@ class OverlayView(ctx: Context) : View(ctx) {
     private val coverText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2A211C.toInt(); isFakeBoldText = true }
     private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-    /** 원래 글자 자리를 한국어로 덮는다. 글자 높이에 맞춰 크기를 정하고, 안 들어가면 줄이고, 그래도 안 되면 …로 자른다. */
+    /**
+     * 원래 글자 자리를 한국어로 덮는다 (tests/sim/render.py 와 같은 규칙).
+     * 글자 높이에 맞춰 크기를 정하고, 안 들어가면 줄이고, 그래도 넘치면 같은 줄의 다음 글자 직전까지만 넓히고, 그래도 안 되면 …로 자른다.
+     * 이미 덮은 상자와 30% 넘게 겹치면 건너뛴다.
+     */
     private fun drawCover(c: Canvas, ls: List<Label>) {
-        val minSize = 10f * d; val maxSize = 17f * d
-        for (l in ls) {
+        val minSize = 9f * d; val maxSize = 17f * d
+        val obs = obstacles.map { RectF((it.left - loc[0]).toFloat(), (it.top - loc[1]).toFloat(), (it.right - loc[0]).toFloat(), (it.bottom - loc[1]).toFloat()) }
+        val done = ArrayList<RectF>()
+        for (l in ls.sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))) {
             val b = RectF((l.bounds.left - loc[0]).toFloat(), (l.bounds.top - loc[1]).toFloat(), (l.bounds.right - loc[0]).toFloat(), (l.bounds.bottom - loc[1]).toFloat())
             if (b.height() < 6 * d || b.width() < 10 * d) continue
-            val r = RectF(b.left - 3 * d, b.top - 2 * d, b.right + 3 * d, b.bottom + 2 * d)
-            if (r.right > width) r.right = width.toFloat()
-            val avail = r.width() - 8 * d - 3 * d
+            var limit = width.toFloat()
+            for (o in obs) if (o.left >= b.right - 2 && !(o.bottom < b.top || o.top > b.bottom) && o != b) limit = minOf(limit, o.left - 4 * d)
+            val r = RectF(b.left - 3 * d, b.top - 2 * d, minOf(b.right + 3 * d, width.toFloat()), b.bottom + 2 * d)
+            if (done.any { o -> val ix = maxOf(0f, minOf(r.right, o.right) - maxOf(r.left, o.left)); val iy = maxOf(0f, minOf(r.bottom, o.bottom) - maxOf(r.top, o.top)); ix * iy > 0.3f * r.width() * r.height() }) continue
+            val avail = r.width() - 11 * d
             var size = (b.height() * 0.72f).coerceIn(minSize, maxSize)
             coverText.textSize = size
             var text = l.text
             var w = coverText.measureText(text)
-            // 폭에 맞춰 줄이기 → 그래도 넘치면 오른쪽으로 더 쓰기(화면 안에서) → 그래도 넘치면 자르기
             while (w > avail && size > minSize) { size -= 1 * d; coverText.textSize = size; w = coverText.measureText(text) }
             if (w > avail) {
-                val extra = minOf(w - avail, width - r.right)
+                val extra = minOf(w - avail, limit - r.right)
                 if (extra > 0) r.right += extra
             }
-            val avail2 = r.width() - 8 * d - 3 * d
+            val avail2 = r.width() - 11 * d
             while (coverText.measureText(text) > avail2 && text.length > 2) text = text.substring(0, text.length - 2) + "…"
+            done.add(r)
             c.drawRoundRect(r, radius, radius, coverBg)
             barPaint.color = when (l.kind) { Label.FOOD -> 0xFFA2502E.toInt(); Label.MT -> 0xFF3F5F7F.toInt(); Label.HANJA -> 0xFF9A9A9A.toInt(); else -> 0xFFC2462E.toInt() }
             c.drawRoundRect(RectF(r.left, r.top, r.left + 3 * d, r.bottom), 2 * d, 2 * d, barPaint)

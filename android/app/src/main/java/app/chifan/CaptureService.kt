@@ -272,25 +272,40 @@ class CaptureService : Service() {
     private fun toLabels(t: Text): List<OverlayView.Label> {
         val out = ArrayList<OverlayView.Label>()
         val seen = ArrayList<Pair<String, String?>>()
+        val lines = ArrayList<Pair<String, Rect>>()
         val useMt = Mt.ready && Prefs.mtOn(this)
         for (block in t.textBlocks) for (line in block.lines) {
             val box = line.boundingBox ?: continue
             val raw = line.text.trim()
             if (!hasHan(raw)) continue
+            lines.add(raw to Rect(box))
             val r = labeler.label(raw)
-            if (r != null && (r.dictParts > 0 || !useMt)) {
+            if (r?.text != null) {
                 out.add(OverlayView.Label(box, r.text, r.kind)); seen.add(raw to r.text)
             } else if (useMt) {
                 val lt = clean(raw)
                 val mt = Mt.cached(lt)
-                if (mt == null) { Mt.request(lt) { scheduleRebuild() }; seen.add(raw to (r?.text)); r?.let { out.add(OverlayView.Label(box, it.text, it.kind)) } }
+                if (mt == null) { Mt.request(lt) { scheduleRebuild() }; seen.add(raw to r?.full) }
                 else if (mt.isNotEmpty()) { out.add(OverlayView.Label(box, mt, OverlayView.Label.MT)); seen.add(raw to "$mt ⟨번역⟩") }
-                else { seen.add(raw to r?.text); r?.let { out.add(OverlayView.Label(box, it.text, it.kind)) } }
-            } else seen.add(raw to null)
+                else seen.add(raw to r?.full)
+            } else seen.add(raw to r?.full)
             if (out.size >= MAX_LABELS) break
         }
         lastOcr = seen
+        lastOcrLines = lines
         return out
+    }
+
+    /** 마지막 OCR 결과 원본 (글자 + 화면 상자). '읽은 글자' 탭의 [OCR 결과 복사]로 내보내 tests/sim 에서 재현한다. */
+    @Volatile var lastOcrLines: List<Pair<String, Rect>> = emptyList()
+    fun lastOcrJson(): String {
+        val sb = StringBuilder("[")
+        lastOcrLines.forEachIndexed { i, (t, b) ->
+            if (i > 0) sb.append(",")
+            sb.append("{\"text\":\"").append(t.replace("\\", "\\\\").replace("\"", "\\\"")).append("\",\"box\":[")
+                .append(b.left).append(",").append(b.top).append(",").append(b.right).append(",").append(b.bottom).append("]}")
+        }
+        return sb.append("]").toString()
     }
 
     /** 한자·숫자·영문만 남긴다 (한글 라벨이 줄에 섞여 읽혀도 매칭이 깨지지 않게) */
