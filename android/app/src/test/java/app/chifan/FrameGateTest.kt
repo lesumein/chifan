@@ -19,6 +19,8 @@ class FrameGateTest {
         cancel = { key -> timers.remove(key) },
         actions = object : FrameGate.Actions {
             override fun clearLabels() { log.add("clear") }
+            override fun hideLabels() { log.add("hide") }
+            override fun showLabels() { log.add("show") }
             override fun nudge() { log.add("nudge") }
             override fun recognize(frameId: Int, seq: Int) { log.add("recognize#$frameId seq$seq") }
         }
@@ -108,6 +110,30 @@ class FrameGateTest {
         assertTrue(gate.moving)
         val id = settleAndRead(10)                    // 이번엔 프레임이 옴
         assertEquals("recognize#$id seq2", log.last())
+    }
+
+    @Test fun `썸네일 로딩 같은 작은 변화엔 라벨을 지우지 않고 한 프레임만 숨겨 다시 읽는다`() {
+        frame(10); settleAndRead(10); gate.onResult(1); gate.onDrawn(); frame(12)
+        log.clear()
+        advance(300); frame(80, changedCells = 10)     // 10% 칸만 바뀜 (이미지 하나 로딩)
+        assertTrue(gate.moving); assertTrue(gate.soft)
+        assertTrue(log.isEmpty())                       // 지우지 않음
+        advance(200)                                    // 멈춤 → 숨기기
+        assertEquals(listOf("hide"), log)
+        advance(20); val id = frame(80, changedCells = 10)   // 숨긴 뒤 들어온 깨끗한 프레임 → 읽고 바로 되살림
+        assertEquals(listOf("hide", "recognize#$id seq2", "show"), log)
+        assertTrue(gate.onResult(2))
+        gate.onDrawn(); frame(12)                       // 그려진 프레임 = 기준
+        assertFalse(gate.moving)
+    }
+
+    @Test fun `작은 변화로 시작했다가 크게 바뀌면 라벨을 지운다`() {
+        frame(10); settleAndRead(10); gate.onResult(1); gate.onDrawn(); frame(12)
+        log.clear()
+        advance(100); frame(80, changedCells = 10)     // 작은 변화
+        advance(16); frame(90)                          // 전체가 바뀜 (스크롤 시작)
+        assertEquals(listOf("clear"), log)
+        assertFalse(gate.soft)
     }
 
     @Test fun `우리가 그린 직후의 프레임은 움직임으로 보지 않는다`() {

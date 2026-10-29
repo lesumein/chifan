@@ -52,13 +52,14 @@ def render(img_path, ocr_path, out_path, dp=None):
         font = ImageFont.truetype(FONT, int(size))
         avail = (box[2] - box[0]) - 11 * dp
         w = draw.textlength(text, font=font)
-        while w > avail and size > 8 * dp:
-            size -= 1 * dp; font = ImageFont.truetype(FONT, int(size)); w = draw.textlength(text, font=font)
+        # 안 들어가면 먼저 오른쪽 빈 자리(다음 글자 직전)까지 넓히고, 그래도 안 되면 글자를 줄인다
         if w > avail:
             extra = min(w - avail, limit - box[2])
             if extra > 0:
                 box[2] += extra
-        avail = (box[2] - box[0]) - 11 * dp
+            avail = (box[2] - box[0]) - 11 * dp
+        while w > avail and size > 8 * dp:
+            size -= 1 * dp; font = ImageFont.truetype(FONT, int(size)); w = draw.textlength(text, font=font)
         while draw.textlength(text, font=font) > avail and len(text) > 2:
             text = text[:-2] + '…'
         draw.rounded_rectangle(box, radius=5 * dp, fill=(255, 253, 249, 247))

@@ -66,12 +66,13 @@ class OverlayView(ctx: Context) : View(ctx) {
             coverText.textSize = size
             var text = l.text
             var w = coverText.measureText(text)
-            while (w > avail && size > minSize) { size -= 1 * d; coverText.textSize = size; w = coverText.measureText(text) }
+            // 안 들어가면 먼저 오른쪽 빈 자리(다음 글자 직전)까지 넓히고, 그래도 안 되면 글자를 줄인다
             if (w > avail) {
                 val extra = minOf(w - avail, limit - r.right)
                 if (extra > 0) r.right += extra
             }
-            val avail2 = r.width() - 11 * d
+            var avail2 = r.width() - 11 * d
+            while (w > avail2 && size > minSize) { size -= 1 * d; coverText.textSize = size; w = coverText.measureText(text) }
             while (coverText.measureText(text) > avail2 && text.length > 2) text = text.substring(0, text.length - 2) + "…"
             done.add(r)
             c.drawRoundRect(r, radius, radius, coverBg)

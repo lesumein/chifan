@@ -159,6 +159,8 @@ class CaptureService : Service() {
         cancel = { key -> timers.remove(key)?.let { main.removeCallbacks(it) } },
         actions = object : FrameGate.Actions {
             override fun clearLabels() { main.post { tracked.clear(); lastSig = ""; overlay?.labels = emptyList() } }
+            override fun hideLabels() { main.post { overlay?.visibility = android.view.View.INVISIBLE } }
+            override fun showLabels() { main.post { overlay?.visibility = android.view.View.VISIBLE } }
             override fun nudge() { overlay?.nudge() }
             override fun recognize(frameId: Int, seq: Int) { currentBmp?.let { recognize(it, seq) } }
         }
