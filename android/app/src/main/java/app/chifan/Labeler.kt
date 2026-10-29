@@ -11,8 +11,8 @@ package app.chifan
  * 단어장의 short(짧은 표기)가 있으면 라벨에는 그것을 쓴다 (微辣 → 약간, 选规格 → 옵션).
  */
 class Labeler(private val dict: Dict) {
-    /** text: 덮어쓰기 라벨 (없으면 null), full: 한자음까지 포함한 전체 풀이 */
-    class Result(val text: String?, val full: String, val kind: Int)
+    /** text: 덮어쓰기 라벨 (없으면 null), full: 한자음까지 포함한 전체 풀이, known: 사전이 충분히 읽은 줄(기계 번역이 끼어들지 않음) */
+    class Result(val text: String?, val full: String, val kind: Int, val known: Boolean = true)
 
     private class Rule(val re: Regex, val keep: Boolean = false, val f: ((MatchResult) -> String?)? = null)
     private fun r(p: String, f: (MatchResult) -> String?) = Rule(Regex(p), false, f)
@@ -127,9 +127,12 @@ class Labeler(private val dict: Dict) {
         val full = fullParts.joinToString(" · ")
         val kind = if (anyFood) OverlayView.Label.FOOD else OverlayView.Label.DICT
         val need = if (total > 12) 0.75f else 0.6f
-        val coverOk = covered >= need * total && !priceStart.containsMatchIn(s)
+        val price = priceStart.containsMatchIn(s)
+        val coverOk = covered >= need * total && !price
         val text = if (parts.isEmpty() || strong == 0 || !coverOk) null else parts.joinToString(" · ")
-        return Result(text, full, kind)
+        // 가격 줄·지점 이름처럼 '읽었지만 덮을 게 없는' 줄은 known: 기계 번역이 엉뚱한 말을 만들지 않게
+        val known = price || covered >= need * total
+        return Result(text, full, kind, known)
     }
 
     /** 라벨용 뜻: 괄호 설명은 뗀다 ("고명 (면 위 토핑)" → "고명"). 괄호뿐인 뜻("(메이퇀)")은 덮지 않는다 → "" */

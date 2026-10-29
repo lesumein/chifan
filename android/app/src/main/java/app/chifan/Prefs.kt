@@ -7,7 +7,7 @@ object Prefs {
     private fun p(ctx: Context) = ctx.getSharedPreferences("chifan", Context.MODE_PRIVATE)
     fun labelsOn(ctx: Context) = p(ctx).getBoolean("labels", true)
     fun setLabelsOn(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("labels", v).apply()
-    fun mtOn(ctx: Context) = p(ctx).getBoolean("mt", false)   // 영어를 거치는 번역이라 품질이 낮아 기본 꺼짐
+    fun mtOn(ctx: Context) = p(ctx).getBoolean("mt", true)    // 0.21: 사전이 못 읽은 줄(리뷰·안내문)에만 쓰므로 기본 켜짐 (모델을 받았을 때만 동작)
     fun setMtOn(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("mt", v).apply()
     fun coverOn(ctx: Context) = p(ctx).getBoolean("cover", true)
     fun setCoverOn(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("cover", v).apply()

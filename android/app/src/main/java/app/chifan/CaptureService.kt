@@ -270,7 +270,7 @@ class CaptureService : Service() {
             val r = labeler.label(raw)
             if (r?.text != null) {
                 out.add(OverlayView.Label(box, r.text, r.kind, p.n)); seen.add(raw to r.text)
-            } else if (useMt) {
+            } else if (useMt && (r == null || !r.known)) {          // 사전이 못 읽은 줄(리뷰·안내문)만 기계 번역
                 val lt = clean(raw)
                 val mt = Mt.cached(lt)
                 if (mt == null) { Mt.request(lt) { scheduleRebuild() }; seen.add(raw to r?.full) }

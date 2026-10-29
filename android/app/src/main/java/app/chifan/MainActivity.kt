@@ -83,7 +83,7 @@ class MainActivity : Activity() {
         root.addView(mtState, lp(top = 2))
 
         val swMt = Switch(this).apply {
-            text = "기계 번역도 켜기 (영어를 거쳐 품질 낮음, 파란 라벨)"
+            text = "사전이 못 읽는 문장은 기계 번역으로 (리뷰·안내문, 파란 라벨, 품질 거침)"
             textSize = 15f; setTextColor(getColor(R.color.ink))
             isChecked = Prefs.mtOn(this@MainActivity)
             setOnCheckedChangeListener { _, on -> Prefs.setMtOn(this@MainActivity, on); CaptureService.instance?.refreshNow() }
@@ -109,8 +109,8 @@ class MainActivity : Activity() {
         root.addView(text("이렇게 써요", 16f, getColor(R.color.ink), bold = true), lp(top = 22))
         root.addView(text(
             "• [덧그리기 시작]을 누르면 폰이 화면 캡처를 허용할지 물어요. ‘전체 화면’으로 허용하세요. 읽는 동안 상태바에 표시돼요.\n" +
-            "• 메이퇀(또는 어떤 앱이든) 화면의 중국어 글자 옆에 한국어 뜻이 붙어요. 빨강·갈색은 사전(재료·조리법·형태 조각을 이어 붙임), 회색은 사전에 없어 한자음만 단 것, 파랑은 기계 번역(기본 꺼짐)이에요.\n" +
-            "• 기계 번역을 켜려면 번역 모델을 한 번 받아야 해요(선택). 한국에서만 받을 수 있고, 받은 뒤엔 인터넷 없이 돌아요.\n" +
+            "• 메이퇀(또는 어떤 앱이든) 화면의 중국어 글자 위에 한국어 뜻을 덮어요. 빨강·갈색은 사전(메뉴·옵션·앱 화면 단어 2,000여 개를 조각으로 이어 붙임), 파랑은 사전이 못 읽은 문장(리뷰·안내문)을 기계 번역한 것이에요.\n" +
+            "• 기계 번역은 번역 모델(약 60MB)을 한 번 받아야 돌아요. 구글 서버에서 받기 때문에 중국에 가기 전에 받아 두세요. 받은 뒤엔 인터넷 없이 돌아요.\n" +
             "• 오른쪽에 뜨는 치판 버튼을 누르면 메뉴 고르기·요청사항·단어장이 작은 창으로 열려요. 메뉴를 누르면 검색어가 복사돼요.\n" +
             "• 버튼은 위아래로 끌어 옮길 수 있어요. 끝나면 알림의 [중지]나 여기 [중지]를 누르세요.", 14f, getColor(R.color.muted)))
 
@@ -147,7 +147,7 @@ class MainActivity : Activity() {
         if (!dl) baseBytes = -1
         mtState.text = when {
             dl -> progressText()
-            mtReady -> "번역 모델이 있어요. 위 스위치로 켜면 사전에 없는 줄을 번역해요 (품질 낮음)."
+            mtReady -> "번역 모델이 있어요. 사전이 못 읽는 문장(리뷰·안내문)을 번역해요 (품질 거침)."
             Mt.lastError != null -> "받지 못했어요: ${Mt.lastError}. 인터넷 연결 확인 후 다시 눌러 주세요."
             else -> "선택 사항이에요. 사전·한자음만으로도 라벨이 붙어요."
         }
