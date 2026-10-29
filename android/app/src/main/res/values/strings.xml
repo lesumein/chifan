@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">치판</string>
+    <string name="service_label">치판 한국어 덧그리기</string>
+    <string name="service_description">배달앱(메이퇀) 화면에 보이는 중국어 메뉴·옵션 글자를 읽어, 그 옆에 한국어 뜻을 띄워 줍니다. 화면을 대신 누르거나 조작하지 않으며, 읽은 내용을 어디에도 보내지 않습니다.</string>
+</resources>

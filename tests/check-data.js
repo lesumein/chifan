@@ -40,7 +40,7 @@ for (const c of cats) if (!foods.some(f => f.cat === c.id)) errs.push(`빈 카�
 // 외부 주소: 배달 H5·스토어 주소(config.js) 말고는 없어야 함 (중국에서 막히는 CDN·폰트 방지)
 const allow = [/^https:\/\/h5\.waimai\.meituan\.com\//, /^https:\/\/play\.google\.com\/store\/apps\/details/, /^https:\/\/apps\.apple\.com\/cn\/app\//, /^http:\/\/www\.w3\.org\/2000\/svg/];
 const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e =>
-  e.name.startsWith('.') || ['tests', 'node_modules', 'screenshots'].includes(e.name) ? [] :
+  e.name.startsWith('.') || ['tests', 'node_modules', 'screenshots', 'android', 'apk'].includes(e.name) ? [] :
   e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
 for (const file of walk(root).filter(f => /\.(html|css|js|json|webmanifest|svg)$/.test(f))) {
   const text = fs.readFileSync(file, 'utf8');

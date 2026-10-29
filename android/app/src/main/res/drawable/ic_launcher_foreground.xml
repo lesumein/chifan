@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- icons/icon.svg와 같은 그림 (직접 그린 것). 어댑티브 아이콘 안전 영역에 맞춰 72% 축소 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="512" android:viewportHeight="512">
+    <group android:scaleX="0.72" android:scaleY="0.72" android:translateX="71.7" android:translateY="71.7">
+        <path android:pathData="M200 150c-18-22 18-38 0-62" android:strokeColor="#FFE7D6" android:strokeWidth="18" android:strokeLineCap="round" android:fillColor="#00000000" android:strokeAlpha="0.9"/>
+        <path android:pathData="M256 140c-18-22 18-38 0-62" android:strokeColor="#FFE7D6" android:strokeWidth="18" android:strokeLineCap="round" android:fillColor="#00000000" android:strokeAlpha="0.9"/>
+        <path android:pathData="M312 150c-18-22 18-38 0-62" android:strokeColor="#FFE7D6" android:strokeWidth="18" android:strokeLineCap="round" android:fillColor="#00000000" android:strokeAlpha="0.9"/>
+        <path android:pathData="M300 236 410 120" android:strokeColor="#3B1A10" android:strokeWidth="14" android:strokeLineCap="round" android:fillColor="#00000000"/>
+        <path android:pathData="M330 244 430 142" android:strokeColor="#3B1A10" android:strokeWidth="14" android:strokeLineCap="round" android:fillColor="#00000000"/>
+        <path android:pathData="M112 236h288c0 92-64 156-144 156s-144-64-144-156z" android:fillColor="#FFF8F0"/>
+        <path android:pathData="M112 236h288" android:strokeColor="#FFF8F0" android:strokeWidth="20" android:strokeLineCap="round" android:fillColor="#00000000"/>
+        <path android:pathData="M200 388h112a12 12 0 0 1 0 24H200a12 12 0 0 1 0-24z" android:fillColor="#FFF8F0"/>
+        <path android:pathData="M168 280c30 22 146 22 176 0" android:strokeColor="#E8833A" android:strokeWidth="14" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    </group>
+</vector>

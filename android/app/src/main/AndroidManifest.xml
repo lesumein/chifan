@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 메이퇀 앱이 설치돼 있는지 확인하고 열기 위해 (Android 11+) -->
+    <queries>
+        <package android:name="com.sankuai.meituan" />
+    </queries>
+
+    <application
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:allowBackup="false">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 메이퇀 화면의 글자를 읽어 한국어를 덧그리는 접근성 서비스.
+             화면을 누르거나 조작하지 않는다 (canPerformGestures 없음). -->
+        <service
+            android:name=".ChifanService"
+            android:exported="false"
+            android:label="@string/service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+    </application>
+</manifest>

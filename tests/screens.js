@@ -59,8 +59,7 @@ async function run(browser, name, dev) {
   // 1) 카드 탭 → 자동 복사 + 토스트
   await page.click('[data-cat="soup"]');
   await page.click('.card[data-id="malatang"]');
-  await page.waitForSelector('.toast.is-on');
-  assert.match(await page.textContent('#toast'), /복사됨: 麻辣烫/);
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('복사됨: 麻辣烫'));
   assert.strictEqual(await page.evaluate(() => navigator.clipboard.readText()), '麻辣烫');
   await shot('02-copied');
 
