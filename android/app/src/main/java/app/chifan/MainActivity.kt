@@ -2,6 +2,8 @@ package app.chifan
 
 import android.Manifest
 import android.app.Activity
+import android.app.DownloadManager
+import java.io.File
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -126,19 +128,63 @@ class MainActivity : Activity() {
     }
     override fun onPause() { super.onPause(); status.removeCallbacks(tick) }
 
-    /** 번역 모델 받기 상태: 받는 중(경과 시간) / 받음 / 실패 */
+    private var baseBytes = -1L
+
+    /** 번역 모델 받기 상태: 받는 중(진행률) / 받음 / 실패 */
     private fun refreshMt() {
         val dl = Mt.downloading
         mtBar.visibility = if (dl) android.view.View.VISIBLE else android.view.View.GONE
         mtBtn.isEnabled = !dl && !mtReady
         mtBtn.text = when { mtReady -> "번역 모델: 받음 ✓"; dl -> "받는 중…"; else -> "번역 모델 받기 (약 60MB, 한국에서 미리)" }
+        if (!dl) baseBytes = -1
         mtState.text = when {
-            dl -> "받는 중… ${(System.currentTimeMillis() - Mt.startedAt) / 1000}초 경과. 와이파이에서 보통 1~3분, 끝나면 여기 표시가 바뀌어요. 이 화면을 나가도 계속 받아요."
+            dl -> progressText()
             mtReady -> "번역 모델이 있어요. 인터넷 없이도 번역돼요."
             Mt.lastError != null -> "받지 못했어요: ${Mt.lastError}. 와이파이 확인 후 다시 눌러 주세요."
             else -> "아직 안 받았어요. 사전에 있는 말만 뜻이 붙어요."
         }
     }
+
+    /** 다운로드 관리자에 잡힌 우리 앱의 받기 진행률. 없으면 앱 저장 공간이 늘어난 양으로 대신 보여 준다. */
+    private fun progressText(): String {
+        val sec = (System.currentTimeMillis() - Mt.startedAt) / 1000
+        val dm = getSystemService(DownloadManager::class.java)
+        var sofar = 0L; var total = 0L; var n = 0; var state = ""
+        runCatching {
+            dm.query(DownloadManager.Query()).use { c ->
+                val iSo = c.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                val iTo = c.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                val iSt = c.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                val iRe = c.getColumnIndex(DownloadManager.COLUMN_REASON)
+                while (c.moveToNext()) {
+                    n++; sofar += c.getLong(iSo); total += maxOf(0L, c.getLong(iTo))
+                    state = when (c.getInt(iSt)) {
+                        DownloadManager.STATUS_PENDING -> "대기 중"
+                        DownloadManager.STATUS_RUNNING -> "받는 중"
+                        DownloadManager.STATUS_PAUSED -> when (c.getInt(iRe)) {
+                            DownloadManager.PAUSED_WAITING_FOR_NETWORK -> "네트워크 기다리는 중"
+                            DownloadManager.PAUSED_QUEUED_FOR_WIFI -> "와이파이 기다리는 중"
+                            else -> "잠시 멈춤"
+                        }
+                        DownloadManager.STATUS_SUCCESSFUL -> "받기 완료, 설치 중"
+                        DownloadManager.STATUS_FAILED -> "실패"
+                        else -> ""
+                    }
+                }
+            }
+        }
+        if (n > 0) {
+            val pct = if (total > 0) " (${sofar * 100 / total}%)" else ""
+            return "$state… ${mb(sofar)} / ${if (total > 0) mb(total) else "?"}$pct · ${sec}초"
+        }
+        // 다운로드 관리자에 안 잡히면 앱 저장 공간 변화로
+        val now = dirSize(File(applicationInfo.dataDir))
+        if (baseBytes < 0) baseBytes = now
+        return "받는 중… 저장 공간 +${mb(now - baseBytes)} · ${sec}초 (진행률을 못 읽는 방식이라 늘어나는 양만 보여요)"
+    }
+
+    private fun mb(b: Long) = String.format("%.1fMB", b / 1048576.0)
+    private fun dirSize(f: File): Long = if (f.isFile) f.length() else (f.listFiles()?.sumOf { dirSize(it) } ?: 0L)
 
     private fun refresh() {
         val overlayOk = Settings.canDrawOverlays(this)

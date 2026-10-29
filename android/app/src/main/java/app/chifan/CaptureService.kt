@@ -62,8 +62,8 @@ class CaptureService : Service() {
         instance = this
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         dict = Dict.get(this)
-        // 번역 모델이 있는지 확인. 없으면 와이파이에서 조용히 받아 둔다 (설정 화면에서 직접 받을 수도 있음)
-        Mt.check { ok -> if (!ok) Mt.download(wifiOnly = true) { _, _ -> } }
+        // 번역 모델이 있는지만 확인한다. 받는 건 설정 화면 버튼으로만 (조용히 걸어 둔 와이파이 대기 요청이 버튼을 막던 문제)
+        Mt.check { }
     }
 
     private var lastText: Text? = null
