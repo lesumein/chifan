@@ -15,16 +15,16 @@ def is_han(c):
 class Dict:
     def __init__(self):
         d = lambda p: json.load(open(os.path.join(ROOT, 'data', p), encoding='utf-8'))
-        self.map = {}
-        for g in d('glossary.json')['items']:
-            self.map[g['zh']] = (g['ko'], None)
+        self.map = {}          # zh -> (라벨용 짧은 뜻, 전체 뜻, food id)
+        # 요청사항 → 단어장(짧은 표기가 있어 우선) → 메뉴 순으로 덮어쓴다
         for r in d('requests.json')['items']:
-            self.map[r['zh']] = (r['ko'], None)
+            self.map[r['zh']] = (r['ko'], r['ko'], None)
+        for g in d('glossary.json')['items']:
+            self.map[g['zh']] = (g.get('short') or g['ko'], g['ko'], None)
         for f in d('foods.json'):
-            ko = f['ko'] + (' ' + '🌶' * f['spicy'] if f.get('spicy') else '')
-            self.map[f['zh']] = (ko, f['id'])
+            self.map[f['zh']] = (f['ko'], f['ko'], f['id'])
             if f.get('q') and f['q'] != f['zh']:
-                self.map[f['q']] = (f['ko'], f['id'])
+                self.map[f['q']] = (f['ko'], f['ko'], f['id'])
         self.max_len = max(len(k) for k in self.map)
         self.hanja = d('hanja.json')
 
@@ -37,20 +37,44 @@ def strip_note(ko):
     return s or ko
 
 
+# 숫자 규칙. 위에서부터 먼저 맞는 것. None 이면 그 자리엔 라벨 없이 지나감. 'keep' 이면 원문 그대로 둔다.
 RULES = [
     (re.compile(r'(\d+(?:\.\d+)?)折'), lambda m: f"-{round((10 - float(m.group(1))) * 10)}%" if 0.1 <= float(m.group(1)) <= 9.9 else None),
-    (re.compile(r'已减(\d+(?:\.\d+)?)元'), lambda m: f"{m.group(1)}위안 할인됨"),
+    (re.compile(r'已减(\d+(?:\.\d+)?)元'), lambda m: f"¥{m.group(1)} 할인됨"),
+    (re.compile(r'已优惠[¥￥]?(\d+(?:\.\d+)?)'), lambda m: f"¥{m.group(1)} 할인됨"),
+    (re.compile(r'还差[¥￥]?(\d+(?:\.\d+)?)起送'), lambda m: f"¥{m.group(1)} 더 담으면 주문 가능"),
+    (re.compile(r'[¥￥]?(\d+(?:\.\d+)?)起送'), lambda m: f"최소 ¥{m.group(1)}"),
+    (re.compile(r'起送[¥￥](\d+(?:\.\d+)?)'), lambda m: f"최소 ¥{m.group(1)}"),
+    (re.compile(r'配送费[¥￥](\d+(?:\.\d+)?)'), lambda m: f"배달비 ¥{m.group(1)}"),
+    (re.compile(r'人均[¥￥]?(\d+(?:\.\d+)?)'), lambda m: f"1인 ¥{m.group(1)}"),
     (re.compile(r'半年售\s*(\d+)\+?'), lambda m: f"반년 {m.group(1)}+ 판매"),
     (re.compile(r'月售\s*(\d+)\+?'), lambda m: f"월 {m.group(1)}+ 판매"),
     (re.compile(r'年售\s*(\d+)\+?'), lambda m: f"연 {m.group(1)}+ 판매"),
-    (re.compile(r'(\d+)%\s*好评'), lambda m: f"좋은 평 {m.group(1)}%"),
+    (re.compile(r'季售\s*(\d+)\+?'), lambda m: f"시즌 {m.group(1)}+ 판매"),
+    (re.compile(r'已售\s*(\d+)\+?'), lambda m: f"{m.group(1)}+ 판매"),
+    (re.compile(r'(\d+)条评价'), lambda m: f"리뷰 {m.group(1)}개"),
+    (re.compile(r'(\d+)%\s*好评率?'), lambda m: f"호평 {m.group(1)}%"),
+    (re.compile(r'好评率\s*(\d+)%'), lambda m: f"호평 {m.group(1)}%"),
     (re.compile(r'(\d+)选(\d+)'), lambda m: f"{m.group(1)}택{m.group(2)}"),
     (re.compile(r'(\d+)人餐'), lambda m: f"{m.group(1)}인 세트"),
-    (re.compile(r'季售\s*(\d+)\+?'), lambda m: f"시즌 {m.group(1)}+ 판매"),
-    (re.compile(r'(\d+)条评价'), lambda m: f"리뷰 {m.group(1)}개"),
+    (re.compile(r'满(\d+)减(\d+)'), lambda m: f"{m.group(1)}↑ -{m.group(2)}"),
+    (re.compile(r'立减(\d+)元?'), lambda m: f"즉시 -{m.group(1)}"),
     (re.compile(r'(\d+)分钟送达'), lambda m: f"{m.group(1)}분 내 배달"),
-    (re.compile(r'[¥￥]\s*\d+(?:\.\d+)?'), lambda m: None),   # 가격은 그대로 읽히니 라벨 없음
-    (re.compile(r'\d+(?:\.\d+)?'), lambda m: None),
+    (re.compile(r'约\s*(\d+)分钟'), lambda m: f"약 {m.group(1)}분"),
+    (re.compile(r'(\d+)分钟'), lambda m: f"{m.group(1)}분"),
+    (re.compile(r'(\d+(?:\.\d+)?)分(?!钟)'), lambda m: f"{m.group(1)}점"),
+    (re.compile(r'预计\s*(\d+:\d+)\s*送达'), lambda m: f"{m.group(1)} 도착 예정"),
+    (re.compile(r'距您\s*(\d+(?:\.\d+)?)\s*km'), lambda m: f"{m.group(1)}km 거리"),
+    (re.compile(r'(\d+(?:\.\d+)?)\s*km'), lambda m: f"{m.group(1)}km"),
+    (re.compile(r'(\d+)号楼'), lambda m: f"{m.group(1)}동"),
+    (re.compile(r'(\d+)个'), lambda m: f"{m.group(1)}개"),
+    (re.compile(r'(\d+)\s*次'), lambda m: f"{m.group(1)}회"),
+    (re.compile(r'[xX×]\s*(\d+)'), lambda m: f"x{m.group(1)}"),
+    (re.compile(r'[+＋-]\s*[¥￥]\s*\d+(?:\.\d+)?'), 'keep'),     # +¥4 같은 추가 요금
+    (re.compile(r'[¥￥]\s*\d+(?:\.\d+)?'), 'keep'),             # 가격은 그대로
+    (re.compile(r'\d+:\d+'), 'keep'),
+    (re.compile(r'\d+(?:\.\d+)?(?:ml|ML|L|g|kg|G)\b'), 'keep'),
+    (re.compile(r'\d+(?:\.\d+)?\+?'), 'keep'),                  # 그 밖의 숫자도 그대로
 ]
 
 
@@ -73,15 +97,13 @@ def longest(dic, s, i):
 
 def label(dic, raw):
     """한 줄 → (라벨 글, kind) 또는 None.
-    사전 조각(2자 이상) 또는 숫자 규칙이 하나는 있어야 라벨을 붙인다.
-    한자음은 덮어쓰기 라벨에서는 쓰지 않는다 (잘못 읽힌 글자·사진 속 글씨가 전부 소음이 됨). '읽은 글자' 탭에서만 보여 준다."""
+    2자 이상 사전 조각이나 뜻 있는 숫자 규칙이 하나는 있어야 라벨을 붙인다. 가격·숫자는 그대로 둔다.
+    한자음은 덮어쓰기 라벨에서는 쓰지 않는다 (잘못 읽힌 글자·사진 속 글씨가 전부 소음이 됨)."""
     s = raw.strip()
     if not any(is_han(c) for c in s):
         return None
-    if re.search(r'[¥￥]\s*\d', s):
-        return None   # 가격이 섞인 줄은 덮지 않는다 (가격이 더 중요)
     parts, kinds = [], []
-    strong = 0   # 2자 이상 사전 조각 또는 규칙
+    strong = 0
     i = 0
     while i < len(s):
         matched = False
@@ -89,9 +111,12 @@ def label(dic, raw):
             m = re_.match(s, i)
             if not m:
                 continue
-            t = f(m)
-            if t:
-                parts.append(t); kinds.append(DICT); strong += 1
+            if f == 'keep':
+                parts.append(m.group(0).replace('￥', '¥').replace(' ', '')); kinds.append(DICT)
+            else:
+                t = f(m)
+                if t:
+                    parts.append(t); kinds.append(DICT); strong += 1
             i = m.end(); matched = True
             break
         if matched:
@@ -101,9 +126,9 @@ def label(dic, raw):
             i += 1; continue
         hit = longest(dic, s, i)
         if hit:
-            w, (ko, food) = hit
-            parts.append(strip_note(ko).replace('🌶', '').strip()); kinds.append(FOOD if food else DICT)
-            if len(w) >= 2 or food:
+            w, (short, ko, food) = hit
+            parts.append(strip_note(short).replace('🌶', '').strip()); kinds.append(FOOD if food else DICT)
+            if len(w) >= 2 or food or len(s) == 1:   # 한 글자 칩(热·大·小)은 줄 전체가 그 글자일 때만 인정
                 strong += 1
             i += len(w); continue
         i += 1   # 사전에 없는 한자: 건너뜀

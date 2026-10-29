@@ -37,7 +37,7 @@ def render(img_path, ocr_path, out_path, dp=None):
             continue
         text, kind = res
         bh, bw = b - t, r - l
-        if bh < 6 * dp or bw < 9 * dp:
+        if bh < 6 * dp or bw < 8 * dp:
             continue
         box = [l - 3 * dp, t - 2 * dp, min(r + 3 * dp, W), b + 2 * dp]
         # 이미 덮은 상자와 30% 넘게 겹치면 건너뜀
@@ -48,11 +48,11 @@ def render(img_path, ocr_path, out_path, dp=None):
                 skip = True; break
         if skip:
             continue
-        size = max(9 * dp, min(17 * dp, bh * 0.72))
+        size = max(8 * dp, min(17 * dp, bh * 0.72))
         font = ImageFont.truetype(FONT, int(size))
         avail = (box[2] - box[0]) - 11 * dp
         w = draw.textlength(text, font=font)
-        while w > avail and size > 9 * dp:
+        while w > avail and size > 8 * dp:
             size -= 1 * dp; font = ImageFont.truetype(FONT, int(size)); w = draw.textlength(text, font=font)
         if w > avail:
             extra = min(w - avail, limit - box[2])

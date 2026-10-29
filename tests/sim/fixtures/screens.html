@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>치판 테스트용 가짜 배달앱 화면</title>
+<!-- 중국 배달앱에서 흔히 보이는 구조와 문구를 흉내 낸 화면. 치판 덧그리기를 여러 화면에서 확인하는 용도. 실제 서비스의 그림·코드는 없음. -->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Noto Sans CJK SC", "Noto Sans SC", sans-serif; color: #222; background: #f5f5f5; width: 412px; }
+  .screen { width: 412px; min-height: 915px; background: #fff; position: relative; overflow: hidden; }
+  .top { height: 44px; display: flex; align-items: center; padding: 0 12px; gap: 10px; font-size: 17px; }
+  .search { flex: 1; background: #f2f2f2; border-radius: 18px; padding: 7px 14px; color: #999; font-size: 14px; }
+  .tabs { display: flex; gap: 22px; padding: 6px 16px; font-size: 16px; border-bottom: 1px solid #eee; }
+  .tabs .on { color: #222; font-weight: 700; border-bottom: 3px solid #ffd100; }
+  .filters { display: flex; gap: 8px; padding: 8px 12px; font-size: 13px; }
+  .filters span { background: #f2f2f2; border-radius: 8px; padding: 5px 10px; }
+  .card { display: flex; gap: 10px; padding: 12px; border-bottom: 1px solid #f0f0f0; }
+  .thumb { width: 80px; height: 80px; border-radius: 8px; background: linear-gradient(135deg, #e9c9a0, #c47a4a); flex: none; }
+  .thumb.sm { width: 64px; height: 64px; }
+  .name { font-size: 16px; font-weight: 700; }
+  .meta { font-size: 12px; color: #666; margin-top: 3px; }
+  .meta b { color: #f60; }
+  .tag { display: inline-block; font-size: 11px; color: #f60; border: 1px solid #f9c9a3; border-radius: 3px; padding: 0 4px; margin-right: 4px; margin-top: 4px; }
+  .tag.blue { color: #3b7; border-color: #bde8d0; }
+  .price { color: #f33; font-weight: 700; font-size: 16px; }
+  .price small { font-size: 11px; }
+  .old { color: #999; text-decoration: line-through; font-size: 12px; margin-left: 4px; }
+  .menu { display: flex; height: 760px; }
+  .cats { width: 88px; background: #f7f7f7; font-size: 13px; }
+  .cats div { padding: 14px 10px; }
+  .cats .on { background: #fff; font-weight: 700; border-left: 3px solid #ffd100; }
+  .dishes { flex: 1; }
+  .dish { display: flex; gap: 10px; padding: 10px; }
+  .dish .name { font-size: 15px; }
+  .desc { font-size: 12px; color: #888; margin-top: 2px; }
+  .btn { background: #ffd100; border-radius: 14px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+  .btn.red { background: #f33; color: #fff; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-radius: 16px 16px 0 0; padding: 16px; box-shadow: 0 -4px 20px rgba(0,0,0,.2); }
+  .dim { position: absolute; inset: 0; background: rgba(0,0,0,.45); }
+  .opt-title { font-size: 14px; font-weight: 700; margin: 12px 0 6px; }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .opts span { border: 1px solid #ddd; border-radius: 6px; padding: 6px 12px; font-size: 13px; }
+  .opts .sel { border-color: #ffd100; background: #fff8d6; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+  .row .v { color: #999; }
+  .section { background: #fff; margin: 8px 10px; border-radius: 10px; padding: 4px 12px; }
+  .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: #fff; border-top: 1px solid #eee; display: flex; align-items: center; padding: 0 14px; gap: 12px; }
+  .bar .total { flex: 1; font-size: 14px; }
+  .bar .go { background: #ffd100; border-radius: 20px; padding: 10px 22px; font-weight: 700; }
+  .status { padding: 20px 16px; }
+  .status h2 { margin: 0 0 6px; font-size: 20px; }
+  .step { display: flex; gap: 10px; padding: 10px 0; font-size: 14px; }
+  .step .dot { width: 10px; height: 10px; border-radius: 5px; background: #ccc; margin-top: 5px; }
+  .step.on .dot { background: #ffd100; }
+  .grey { color: #999; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; }
+  .gcard { background: #fff; border-radius: 8px; overflow: hidden; }
+  .gcard .thumb { width: 100%; height: 120px; border-radius: 0; }
+  .gcard .body { padding: 8px; }
+  .badge { position: absolute; background: #f33; color: #fff; font-size: 11px; padding: 1px 5px; border-radius: 0 0 6px 0; }
+  .rel { position: relative; }
+  .pill { background: #fff3e6; color: #f60; font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- 1. 가게 목록 (검색 결과) -->
+<section class="screen" id="s1">
+  <div class="top"><span>‹</span><div class="search">麻辣烫</div><span>搜索</span></div>
+  <div class="tabs"><span class="on">全部</span><span>外卖</span><span>团购</span><span>地点</span><span>笔记</span></div>
+  <div class="filters"><span>全城 ▾</span><span>综合排序 ▾</span><span>距离最近</span><span>30分钟送达</span><span>减配送费</span></div>
+  <div class="card"><div class="thumb"></div><div>
+    <div class="name">张亮麻辣烫（五道口店）</div>
+    <div class="meta"><b>4.8分</b> 月售2000+ 起送¥20 配送费¥3</div>
+    <div class="meta">1.2km 约35分钟 人均¥28</div>
+    <div><span class="tag">满30减5</span><span class="tag">新客立减8元</span><span class="tag blue">准时宝</span></div>
+  </div></div>
+  <div class="card"><div class="thumb"></div><div>
+    <div class="name">杨国福麻辣烫（成府路店）</div>
+    <div class="meta"><b>4.7分</b> 月售1500+ 起送¥15 免配送费</div>
+    <div class="meta">0.8km 约25分钟 人均¥26</div>
+    <div><span class="tag">领券满35减8</span><span class="tag">买一赠一</span></div>
+  </div></div>
+  <div class="card"><div class="thumb"></div><div>
+    <div class="name">老城一锅·麻辣香锅</div>
+    <div class="meta"><b>4.9分</b> 月售800+ 起送¥30 配送费¥5</div>
+    <div class="meta">2.5km 约45分钟 人均¥45 休息中</div>
+    <div><span class="tag">首单立减10元</span><span class="tag">收藏送优惠券</span></div>
+  </div></div>
+  <div class="card"><div class="thumb"></div><div>
+    <div class="name">川味小馆（学院路店）</div>
+    <div class="meta"><b>4.6分</b> 月售500+ 起送¥25 配送费¥2</div>
+    <div class="meta">1.9km 约40分钟 人均¥32 营业中</div>
+    <div><span class="tag">折扣菜</span><span class="tag">支持自取</span><span class="tag blue">放心吃</span></div>
+  </div></div>
+  <div class="card"><div class="thumb"></div><div>
+    <div class="name">韩式炸鸡·BHC（清华店）</div>
+    <div class="meta"><b>4.5分</b> 月售300+ 起送¥40 配送费¥6</div>
+    <div class="meta">3.1km 约50分钟 人均¥79</div>
+    <div><span class="tag">满99减20</span><span class="tag">门店新客专享</span></div>
+  </div></div>
+</section>
+
+<!-- 2. 가게 메뉴 -->
+<section class="screen" id="s2">
+  <div class="top"><span>‹</span><div style="flex:1;font-weight:700">张亮麻辣烫（五道口店）</div><span>⋯</span></div>
+  <div class="tabs"><span class="on">点餐</span><span>评价 2341</span><span>商家</span></div>
+  <div style="padding:6px 12px;font-size:12px;color:#666">公告：新鲜食材每日现采，欢迎品尝！ 配送约35分钟 · 起送¥20</div>
+  <div class="menu">
+    <div class="cats"><div class="on">招牌推荐</div><div>折扣菜</div><div>麻辣烫</div><div>荤菜</div><div>素菜</div><div>主食</div><div>小吃</div><div>饮品</div><div>餐具</div></div>
+    <div class="dishes">
+      <div class="dish"><div class="thumb sm"></div><div style="flex:1">
+        <div class="name">招牌麻辣烫（含米饭）</div><div class="desc">自选食材，骨汤底，微辣可调</div>
+        <div class="meta">月售1200+ 好评率98%</div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span class="price"><small>¥</small>18<span class="old">¥25</span></span><span class="btn">选规格</span></div>
+      </div></div>
+      <div class="dish"><div class="thumb sm"></div><div style="flex:1">
+        <div class="name">肥牛麻辣烫双人套餐</div><div class="desc">肥牛+午餐肉+鹌鹑蛋+宽粉+青菜</div>
+        <div class="meta">月售600+ 好评率97%</div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span class="price"><small>¥</small>39.9<span class="old">¥58</span></span><span class="btn">选规格</span></div>
+      </div></div>
+      <div class="dish"><div class="thumb sm"></div><div style="flex:1">
+        <div class="name">番茄浓汤麻辣烫（不辣）</div><div class="desc">酸甜番茄汤底，不辣，适合小朋友</div>
+        <div class="meta">月售300+ 好评率99%</div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span class="price"><small>¥</small>16</span><span class="btn">选规格</span></div>
+      </div></div>
+      <div class="dish"><div class="thumb sm"></div><div style="flex:1">
+        <div class="name">手工牛肉丸（5个）</div><div class="desc">Q弹牛肉丸，加料必点</div>
+        <div class="meta">月售900+</div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span class="price"><small>¥</small>6</span><span class="btn">+</span></div>
+      </div></div>
+      <div class="dish"><div class="thumb sm"></div><div style="flex:1">
+        <div class="name">冰镇酸梅汤 500ml</div><div class="desc">解辣解腻，冰爽</div>
+        <div class="meta">月售2000+ 已售罄</div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span class="price"><small>¥</small>5</span><span class="btn" style="background:#ddd">售罄</span></div>
+      </div></div>
+      <div class="dish"><div class="thumb sm"></div><div style="flex:1">
+        <div class="name">米饭</div><div class="desc">东北大米</div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><span class="price"><small>¥</small>2</span><span class="btn">+</span></div>
+      </div></div>
+    </div>
+  </div>
+  <div class="bar"><div class="total">还差¥20起送</div><div class="go" style="background:#ddd">¥20起送</div></div>
+</section>
+
+<!-- 3. 옵션 선택 창 -->
+<section class="screen" id="s3">
+  <div class="top"><span>‹</span><div style="flex:1;font-weight:700">张亮麻辣烫（五道口店）</div></div>
+  <div class="dim"></div>
+  <div class="sheet">
+    <div style="display:flex;gap:10px"><div class="thumb sm"></div><div><div class="name">招牌麻辣烫（含米饭）</div><div class="desc">月售1200+ 好评率98%</div></div></div>
+    <div class="opt-title">份量 <span class="grey" style="font-weight:400">必选</span></div>
+    <div class="opts"><span class="sel">小份</span><span>中份 +¥4</span><span>大份 +¥8</span></div>
+    <div class="opt-title">辣度 <span class="grey" style="font-weight:400">必选</span></div>
+    <div class="opts"><span>不辣</span><span class="sel">微辣</span><span>中辣</span><span>特辣</span><span>变态辣</span></div>
+    <div class="opt-title">汤底</div>
+    <div class="opts"><span class="sel">骨汤</span><span>番茄汤</span><span>麻酱干拌</span></div>
+    <div class="opt-title">加料 <span class="grey" style="font-weight:400">可选，多选</span></div>
+    <div class="opts"><span>加肥牛 +¥8</span><span>加午餐肉 +¥3</span><span>加鹌鹑蛋 +¥2</span><span>加宽粉 +¥2</span><span>加香菜</span><span>不要香菜</span></div>
+    <div class="opt-title">主食</div>
+    <div class="opts"><span class="sel">含米饭</span><span>不要米饭 -¥2</span><span>换方便面 +¥1</span></div>
+    <div class="row"><span>已选：小份、微辣、骨汤、含米饭</span><span>数量 － 1 ＋</span></div>
+    <div class="row" style="border:0"><span class="price"><small>¥</small>18</span><span class="btn red" style="padding:10px 24px;font-size:14px">加入购物车</span></div>
+  </div>
+</section>
+
+<!-- 4. 주문 확인 -->
+<section class="screen" id="s4" style="background:#f5f5f5">
+  <div class="top" style="background:#fff"><span>‹</span><div style="flex:1;font-weight:700">确认订单</div></div>
+  <div class="section">
+    <div class="row"><span>外卖配送</span><span>到店自取</span></div>
+    <div class="row"><div><div style="font-weight:700">清华大学 紫荆公寓 3号楼 201</div><div class="grey" style="font-size:12px">王** 138****8888</div></div><span>›</span></div>
+    <div class="row"><span>送达时间</span><span class="v">立即送出（约35分钟）›</span></div>
+  </div>
+  <div class="section">
+    <div class="row"><span style="font-weight:700">张亮麻辣烫（五道口店）</span></div>
+    <div class="row"><span>招牌麻辣烫（含米饭）<br><span class="grey" style="font-size:12px">小份、微辣、骨汤</span></span><span>x1 <span class="price">¥18</span></span></div>
+    <div class="row"><span>手工牛肉丸（5个）</span><span>x2 <span class="price">¥12</span></span></div>
+    <div class="row"><span>打包费</span><span>¥2</span></div>
+    <div class="row"><span>配送费</span><span><span class="old">¥5</span> ¥3</span></div>
+    <div class="row"><span>优惠券</span><span class="v">满30减5 ›</span></div>
+    <div class="row"><span>红包</span><span class="v">暂无可用 ›</span></div>
+  </div>
+  <div class="section">
+    <div class="row"><span>餐具数量</span><span class="v">无需餐具 ›</span></div>
+    <div class="row"><span>备注</span><span class="v">口味偏好、过敏信息等 ›</span></div>
+    <div class="row"><span>发票</span><span class="v">本店不支持开发票</span></div>
+    <div class="row"><span>支付方式</span><span class="v">微信支付 ›</span></div>
+  </div>
+  <div class="bar"><div class="total">已优惠¥7 合计 <span class="price">¥30</span></div><div class="go">提交订单</div></div>
+</section>
+
+<!-- 5. 배달 상태 -->
+<section class="screen" id="s5">
+  <div class="top"><span>‹</span><div style="flex:1;font-weight:700">订单详情</div><span>客服</span></div>
+  <div class="status">
+    <h2>骑手已取餐，正在配送中</h2>
+    <div class="grey">预计 12:35 送达 · 距您 1.1km</div>
+    <div class="step on"><div class="dot"></div><div>已送达 <span class="grey">--:--</span></div></div>
+    <div class="step on"><div class="dot"></div><div>骑手已取餐 <span class="grey">12:14</span></div></div>
+    <div class="step on"><div class="dot"></div><div>商家已接单，备餐中 <span class="grey">12:03</span></div></div>
+    <div class="step on"><div class="dot"></div><div>订单已支付 <span class="grey">12:02</span></div></div>
+    <div class="step on"><div class="dot"></div><div>订单已提交 <span class="grey">12:01</span></div></div>
+    <div style="display:flex;gap:10px;margin-top:10px"><span class="btn">联系骑手</span><span class="btn">联系商家</span><span class="btn">催单</span><span class="btn">申请退款</span></div>
+  </div>
+  <div class="section">
+    <div class="row"><span>骑手</span><span class="v">李师傅 已为您服务 1200 次</span></div>
+    <div class="row"><span>配送地址</span><span class="v">清华大学 紫荆公寓 3号楼 201</span></div>
+    <div class="row"><span>订单号</span><span class="v">1234 5678 9012 3456</span></div>
+    <div class="row"><span>支付方式</span><span class="v">微信支付</span></div>
+    <div class="row"><span>实付</span><span class="price">¥30</span></div>
+  </div>
+</section>
+
+<!-- 6. 밀크티 가게 메뉴 + 옵션 -->
+<section class="screen" id="s6">
+  <div class="top"><span>‹</span><div style="flex:1;font-weight:700">蜜雪冰城（学院路店）</div></div>
+  <div class="tabs"><span class="on">点餐</span><span>评价 5120</span><span>商家</span></div>
+  <div class="menu" style="height:520px">
+    <div class="cats"><div class="on">热销榜</div><div>新品上市</div><div>冰淇淋</div><div>奶茶</div><div>果茶</div><div>咖啡</div><div>小料</div></div>
+    <div class="dishes">
+      <div class="dish"><div class="thumb sm"></div><div style="flex:1"><div class="name">珍珠奶茶</div><div class="desc">经典之选，Q弹珍珠</div><div class="meta">月售5000+</div><div style="display:flex;justify-content:space-between"><span class="price"><small>¥</small>7</span><span class="btn">选规格</span></div></div></div>
+      <div class="dish"><div class="thumb sm"></div><div style="flex:1"><div class="name">冰鲜柠檬水</div><div class="desc">现切柠檬，清爽解渴</div><div class="meta">月售8000+</div><div style="display:flex;justify-content:space-between"><span class="price"><small>¥</small>4</span><span class="btn">选规格</span></div></div></div>
+      <div class="dish"><div class="thumb sm"></div><div style="flex:1"><div class="name">芋圆烧仙草</div><div class="desc">芋圆+红豆+仙草冻</div><div class="meta">月售2200+</div><div style="display:flex;justify-content:space-between"><span class="price"><small>¥</small>8</span><span class="btn">选规格</span></div></div></div>
+      <div class="dish"><div class="thumb sm"></div><div style="flex:1"><div class="name">美式咖啡（冰/热）</div><div class="desc">现磨咖啡豆</div><div class="meta">月售900+</div><div style="display:flex;justify-content:space-between"><span class="price"><small>¥</small>6</span><span class="btn">选规格</span></div></div></div>
+    </div>
+  </div>
+  <div class="sheet" style="box-shadow:none;border-top:1px solid #eee">
+    <div class="opt-title">温度 <span class="grey" style="font-weight:400">必选</span></div>
+    <div class="opts"><span class="sel">正常冰</span><span>少冰</span><span>去冰</span><span>常温</span><span>热</span></div>
+    <div class="opt-title">甜度 <span class="grey" style="font-weight:400">必选</span></div>
+    <div class="opts"><span class="sel">标准糖</span><span>七分糖</span><span>半糖</span><span>三分糖</span><span>不另外加糖</span></div>
+    <div class="opt-title">加料</div>
+    <div class="opts"><span>珍珠 +¥1</span><span>椰果 +¥1</span><span>芋圆 +¥2</span><span>奶盖 +¥3</span></div>
+    <div class="row" style="border:0"><span class="price"><small>¥</small>7</span><span class="btn red" style="padding:10px 24px;font-size:14px">加入购物车</span></div>
+  </div>
+</section>
+
+<!-- 7. 공동구매(团购) 격자 -->
+<section class="screen" id="s7" style="background:#f5f5f5">
+  <div class="top" style="background:#fff"><span>‹</span><div class="search">回锅肉</div></div>
+  <div class="card" style="background:#fff"><div class="thumb sm"></div><div><div class="name">湘村小炒（双桥店）</div><div class="meta">暂无星级 双桥 湘菜</div><div class="meta">季售500+ 1154条评价 人均¥34</div></div></div>
+  <div class="grid">
+    <div class="gcard rel"><div class="badge">4.5折</div><div class="thumb"></div><div class="body"><div class="name">【湘辣诱惑】回锅肉+西红柿炒蛋双人餐</div><div class="meta">随时退 | 过期自动退</div><div><span class="price"><small>¥</small>21.6</span><span class="old">¥48</span></div></div></div>
+    <div class="gcard rel"><div class="badge">3.5折</div><div class="thumb"></div><div class="body"><div class="name">特色肉汤泡饭+裙带菜汤</div><div class="meta">随时退 | 过期自动退</div><div><span class="price"><small>¥</small>14.8</span><span class="old">¥43</span></div></div></div>
+    <div class="gcard rel"><div class="badge">秒杀</div><div class="thumb"></div><div class="body"><div class="name">【湘味经典】辣椒炒肉盖浇饭</div><div class="meta">98%好评 已售300+</div><div><span class="price"><small>¥</small>11</span><span class="old">¥32</span></div></div></div>
+    <div class="gcard rel"><div class="badge">3.6折</div><div class="thumb"></div><div class="body"><div class="name">【招牌双选】味光头粉/鱼粉 2选1</div><div class="meta">随时退 | 过期自动退</div><div><span class="price"><small>¥</small>17.8</span><span class="old">¥50</span></div></div></div>
+  </div>
+  <div style="text-align:center;font-size:13px;color:#666;padding:8px">更多 2 个团购 ▾</div>
+</section>
+
+</body>
+</html>

@@ -16,10 +16,11 @@ class Food(
 class Category(val id: String, val ko: String, val zh: String, val emoji: String, val color: Int)
 class Request(val id: String, val group: String, val ko: String, val zh: String, val excl: String?)
 class Group(val id: String, val ko: String)
-class Gloss(val zh: String, val ko: String, val group: String)
+class Gloss(val zh: String, val ko: String, val group: String, val short: String?)
 
 /** 덧그리기 결과: 화면 글자 안의 한 구간과 뜻 */
-class Hit(val zh: String, val ko: String, val foodId: String?)
+/** short: 라벨용 짧은 표기 (없으면 ko) */
+class Hit(val zh: String, val ko: String, val foodId: String?, val short: String = ko)
 
 /**
  * 사전. assets(레포 data 폴더의 json)에서 한 번 읽어 둔다.
@@ -70,14 +71,15 @@ class Dict private constructor(ctx: Context) {
         val gi = gl.getJSONArray("items")
         gloss = (0 until gi.length()).map { i ->
             val o = gi.getJSONObject(i)
-            Gloss(o.getString("zh"), o.getString("ko"), o.getString("group"))
+            Gloss(o.getString("zh"), o.getString("ko"), o.getString("group"), o.optString("short").ifEmpty { null })
         }
 
         val hj = JSONObject(ctx.assets.open("hanja.json").readBytes().decodeToString())
         for (k in hj.keys()) if (k.length == 1) hanja[k[0]] = hj.getString(k)
 
-        gloss.forEach { put(it.zh, Hit(it.zh, it.ko, null)) }
+        // 요청사항 → 단어장(짧은 표기가 있어 우선) → 메뉴 순으로 덮어쓴다 (tests/sim/labeler.py 와 같은 순서)
         requests.forEach { put(it.zh, Hit(it.zh, it.ko, null)) }
+        gloss.forEach { put(it.zh, Hit(it.zh, it.ko, null, it.short ?: it.ko)) }
         foods.forEach { f ->
             val ko = f.ko + if (f.spicy > 0) " " + "🌶".repeat(f.spicy) else ""
             put(f.zh, Hit(f.zh, ko, f.id))

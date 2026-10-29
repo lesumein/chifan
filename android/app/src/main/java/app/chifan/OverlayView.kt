@@ -51,7 +51,7 @@ class OverlayView(ctx: Context) : View(ctx) {
      * 이미 덮은 상자와 30% 넘게 겹치면 건너뛴다.
      */
     private fun drawCover(c: Canvas, ls: List<Label>) {
-        val minSize = 9f * d; val maxSize = 17f * d
+        val minSize = 8f * d; val maxSize = 17f * d
         val obs = obstacles.map { RectF((it.left - loc[0]).toFloat(), (it.top - loc[1]).toFloat(), (it.right - loc[0]).toFloat(), (it.bottom - loc[1]).toFloat()) }
         val done = ArrayList<RectF>()
         for (l in ls.sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))) {

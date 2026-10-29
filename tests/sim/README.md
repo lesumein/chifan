@@ -12,3 +12,11 @@ python3 tests/sim/render.py shot.jpg shot.ocr.json out.png   # 라벨을 덮어 
 - 로컬 OCR은 ML Kit과 다르게 읽을 수 있다. 실제 폰 결과를 재현하려면 치판 창 → '읽은 글자' → **[OCR 결과 복사(JSON)]**로 받은 json을 `render.py`에 그대로 넣는다 (형식이 같다).
 - `labeler.py` 와 `Labeler.kt`, `render.py` 와 `drawCover` 는 규칙이 같아야 한다. 한쪽을 바꾸면 다른 쪽도 바꾼다.
 - 폰트: Noto Sans CJK (`apt install fonts-noto-cjk`). 이모지는 로컬에서 네모로 보이지만 폰에서는 제대로 나온다.
+
+## 가짜 화면 묶음 (fixtures/screens.html)
+
+메이퇀 H5는 해외 IP에서 가게 목록을 내려주지 않아, 흔한 화면 구조를 직접 만든 7장(가게 목록·메뉴·옵션 창·주문 확인·배달 상태·밀크티 메뉴·공동구매 격자)으로 회귀 확인한다.
+```sh
+node tests/sim/shoot.js /tmp/fx            # 폰 크기로 캡처
+python3 tests/sim/batch.py /tmp/fx /tmp/fxout   # OCR → 라벨 → 덮어 그리기, sheet.png 와 못 붙인 줄 목록
+```
