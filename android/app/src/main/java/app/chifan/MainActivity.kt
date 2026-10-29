@@ -68,7 +68,7 @@ class MainActivity : Activity() {
         root.addView(meituanBtn, lp(top = 8))
 
         mtBtn = button("번역 모델 받기 (약 60MB, 한국에서 미리)") {
-            Mt.download(wifiOnly = false) { ok, err ->
+            Mt.download(this) { ok, err ->
                 runOnUiThread {
                     Toast.makeText(this, if (ok) "번역 모델을 받았어요. 이제 오프라인에서도 번역돼요" else "받지 못했어요: ${err ?: "네트워크 확인"}", Toast.LENGTH_LONG).show()
                     mtReady = ok; refresh()
@@ -135,12 +135,12 @@ class MainActivity : Activity() {
         val dl = Mt.downloading
         mtBar.visibility = if (dl) android.view.View.VISIBLE else android.view.View.GONE
         mtBtn.isEnabled = !dl && !mtReady
-        mtBtn.text = when { mtReady -> "번역 모델: 받음 ✓"; dl -> "받는 중…"; else -> "번역 모델 받기 (약 60MB, 한국에서 미리)" }
+        mtBtn.text = when { mtReady -> "번역 모델: 받음 ✓"; dl -> "받는 중…"; else -> "번역 모델 받기 (약 60MB, 와이파이·데이터 모두 됨)" }
         if (!dl) baseBytes = -1
         mtState.text = when {
             dl -> progressText()
             mtReady -> "번역 모델이 있어요. 인터넷 없이도 번역돼요."
-            Mt.lastError != null -> "받지 못했어요: ${Mt.lastError}. 와이파이 확인 후 다시 눌러 주세요."
+            Mt.lastError != null -> "받지 못했어요: ${Mt.lastError}. 인터넷 연결 확인 후 다시 눌러 주세요."
             else -> "아직 안 받았어요. 사전에 있는 말만 뜻이 붙어요."
         }
     }
