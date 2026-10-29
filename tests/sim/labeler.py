@@ -46,6 +46,9 @@ RULES = [
     (re.compile(r'(\d+)%\s*好评'), lambda m: f"좋은 평 {m.group(1)}%"),
     (re.compile(r'(\d+)选(\d+)'), lambda m: f"{m.group(1)}택{m.group(2)}"),
     (re.compile(r'(\d+)人餐'), lambda m: f"{m.group(1)}인 세트"),
+    (re.compile(r'季售\s*(\d+)\+?'), lambda m: f"시즌 {m.group(1)}+ 판매"),
+    (re.compile(r'(\d+)条评价'), lambda m: f"리뷰 {m.group(1)}개"),
+    (re.compile(r'(\d+)分钟送达'), lambda m: f"{m.group(1)}분 내 배달"),
     (re.compile(r'[¥￥]\s*\d+(?:\.\d+)?'), lambda m: None),   # 가격은 그대로 읽히니 라벨 없음
     (re.compile(r'\d+(?:\.\d+)?'), lambda m: None),
 ]

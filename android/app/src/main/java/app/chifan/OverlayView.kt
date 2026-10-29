@@ -84,7 +84,13 @@ class OverlayView(ctx: Context) : View(ctx) {
         }
     }
 
+    /** 화면이 멈춘 뒤 프레임을 하나 받기 위해 그림을 '아주 조금' 바꾼다 (한쪽 구석 1px, 거의 투명). 내용이 바뀌어야 캡처 프레임이 생긴다. */
+    private var nudgeOn = false
+    private val nudgePaint = Paint().apply { color = 0x01000000 }
+    fun nudge() { nudgeOn = !nudgeOn; postInvalidate() }
+
     override fun onDraw(c: Canvas) {
+        if (nudgeOn) c.drawRect(0f, (height - 1).toFloat(), 1f, height.toFloat(), nudgePaint)
         val ls = labels
         synchronized(drawn) { drawn.clear() }
         if (ls.isEmpty()) return

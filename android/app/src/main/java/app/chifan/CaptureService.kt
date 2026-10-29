@@ -52,7 +52,6 @@ class CaptureService : Service() {
     private var width = 0; private var height = 0; private var dpi = 0
     private var lastCaptureAt = 0L
     private var lastGrid: IntArray? = null   // 라벨이 그려진 상태의 화면(축소 밝기 격자). 이것과 거의 같으면 아무것도 안 함
-    private var bigChange = false            // 화면이 크게 바뀜(스크롤·페이지 전환) → 옛 라벨을 다 버린다
     private var lastSig = ""             // 마지막 OCR 결과 서명 (같으면 라벨을 다시 그리지 않음)
     @Volatile private var busy = false
     @Volatile private var paused = false
@@ -153,12 +152,32 @@ class CaptureService : Service() {
         projection?.stop(); projection = null
     }
 
-    /**
-     * 새 프레임. 흐름:
-     * 1) 라벨이 그려진 화면이 지난번과 같으면 아무것도 안 한다.
-     * 2) 달라졌으면 라벨을 숨기고(한 프레임), 숨긴 뒤 들어온 깨끗한 프레임을 OCR에 넘기고 라벨을 바로 되살린다.
-     * 3) 라벨을 새로 그린 직후 들어오는 프레임은 비교 기준으로만 삼는다 (우리 그림을 '변화'로 보지 않게).
-     */
+    // ---------- 프레임 처리: 멈춘 화면만 읽는다 ----------
+    // 캡처→인식→그리기에 0.3~0.6초가 걸리므로, 움직이는 동안 읽으면 라벨이 "예전 자리"에 찍힌다.
+    // 그래서 화면이 바뀌기 시작하면 라벨을 바로 지우고, 프레임이 더 안 들어온 지 200ms가 지나야(멈춤) 읽는다.
+    private var prevGrid: IntArray? = null     // 직전 프레임 (움직임 감지용)
+    @Volatile private var moving = false
+    @Volatile private var captureSeq = 0       // 움직임이 새로 시작될 때마다 +1. 늦게 온 OCR 결과(옛 화면)는 버린다
+    private var nudges = 0
+    private val settle = Runnable {
+        // 프레임이 멈췄다: 깨끗한(라벨 없는) 프레임을 하나 받아 읽는다. 라벨이 비어 있으니 숨길 필요가 없고,
+        // 화면이 가만히 있으면 프레임이 안 오므로 오버레이 투명도를 살짝 흔들어 프레임을 만든다.
+        moving = false; waitingClean = true; hideAt = System.currentTimeMillis(); nudges = 0
+        nudge()
+    }
+    private val renudge = Runnable { if (waitingClean && nudges < 4) nudge() else if (waitingClean) { waitingClean = false; enterMoving() } }
+    private fun nudge() { overlay?.nudge(); nudges++; main.removeCallbacks(renudge); main.postDelayed(renudge, 150) }
+
+    private fun enterMoving() {
+        captureSeq++
+        moving = true; waitingClean = false
+        main.post {
+            tracked.clear(); lastSig = ""
+            overlay?.labels = emptyList()
+            main.removeCallbacks(settle); main.postDelayed(settle, 200)
+        }
+    }
+
     private fun onFrame(r: ImageReader) {
         val img = r.acquireLatestImage() ?: return
         try {
@@ -169,48 +188,45 @@ class CaptureService : Service() {
             val padded = Bitmap.createBitmap(rowStride / pixelStride, height, Bitmap.Config.ARGB_8888)
             padded.copyPixelsFromBuffer(plane.buffer)
             val bmp = if (padded.width == width) padded else Bitmap.createBitmap(padded, 0, 0, width, height)
+            val g = grid(bmp)
+            val dPrev = diffRatio(prevGrid, g)
+            prevGrid = g
 
-            if (waitingClean) {
-                if (now - hideAt < 25) return                 // 아직 라벨이 보이던 프레임일 수 있음
-                if (now - hideAt > 600) { waitingClean = false; main.post { overlay?.visibility = android.view.View.VISIBLE }; return }
-                waitingClean = false
-                main.post { overlay?.visibility = android.view.View.VISIBLE }
-                lastCaptureAt = now; busy = true
-                recognize(bmp)
+            if (settleNext) { settleNext = false; lastGrid = g; return }   // 우리가 그린 직후 프레임 = 기준
+
+            if (moving) {   // 아직 움직이는 중: 멈춤 타이머만 미룬다
+                if (dPrev >= 0.006f) { main.removeCallbacks(settle); main.postDelayed(settle, 200) }
                 return
             }
-            val g = grid(bmp)
-            if (settleNext) { settleNext = false; lastGrid = g; return }
-            val diff = diffRatio(lastGrid, g)
-            if (diff < 0.006f || busy || now - lastCaptureAt < 600) return   // 0.6% 미만(커서·아이콘 깜빡임)은 변화로 안 봄
-            bigChange = diff > 0.30f
-            lastGrid = g
-            waitingClean = true; hideAt = now
-            main.post { overlay?.visibility = android.view.View.INVISIBLE }
+            if (waitingClean) {
+                if (now - hideAt < 10) return
+                if (dPrev >= 0.006f && now - hideAt > 60) { enterMoving(); return }   // 다시 움직이기 시작
+                waitingClean = false
+                main.removeCallbacks(renudge)
+                lastGrid = g; lastCaptureAt = now; busy = true
+                recognize(bmp, captureSeq)
+                return
+            }
+            // 라벨이 그려진 채 가만히 있는 상태: 기준과 0.6% 넘게 달라지면 움직임 시작
+            if (diffRatio(lastGrid, g) >= 0.006f) enterMoving()
         } finally { img.close() }
     }
 
-    private class Tracked(val label: OverlayView.Label, var missing: Int)
-    private var tracked: MutableList<Tracked> = ArrayList()
+    private var tracked: MutableList<OverlayView.Label> = ArrayList()
 
     /**
      * 새 라벨을 기존 라벨과 맞춰 본다. 같은 글자가 거의 같은 자리에 있으면 기존 라벨(자리 포함)을 그대로 쓴다.
-     * OCR은 같은 화면도 매번 상자가 몇 px씩 달라서, 이 단계가 없으면 라벨이 계속 옮겨 다닌다.
-     * 한 번 안 읽힌 라벨은 한 바퀴 더 두었다가 지운다 (화면이 크게 바뀐 뒤에는 바로 다 버린다).
+     * OCR은 같은 화면도 매번 상자가 몇 px씩 달라서, 이 단계가 없으면 라벨이 계속 옮겨 다닌다. 안 읽힌 라벨은 바로 지운다.
      */
     private fun merge(fresh: List<OverlayView.Label>): List<OverlayView.Label> {
-        if (bigChange) { tracked.clear(); bigChange = false }
         val used = BooleanArray(fresh.size)
-        val out = ArrayList<Tracked>()
+        val out = ArrayList<OverlayView.Label>()
         for (old in tracked) {
-            var idx = -1
-            for (i in fresh.indices) if (!used[i] && fresh[i].text == old.label.text && near(fresh[i].bounds, old.label.bounds)) { idx = i; break }
-            if (idx >= 0) { used[idx] = true; out.add(Tracked(old.label, 0)) }
-            else if (old.missing < 1) out.add(Tracked(old.label, old.missing + 1))
+            for (i in fresh.indices) if (!used[i] && fresh[i].text == old.text && near(fresh[i].bounds, old.bounds)) { used[i] = true; out.add(old); break }
         }
-        for (i in fresh.indices) if (!used[i]) out.add(Tracked(fresh[i], 0))
+        for (i in fresh.indices) if (!used[i]) out.add(fresh[i])
         tracked = out
-        return out.map { it.label }.sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))
+        return out.sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))
     }
 
     private fun near(a: Rect, b: Rect): Boolean {
@@ -245,9 +261,10 @@ class CaptureService : Service() {
         return n.toFloat() / b.size
     }
 
-    private fun recognize(bmp: Bitmap) {
+    private fun recognize(bmp: Bitmap, seq: Int) {
         recognizer.process(InputImage.fromBitmap(bmp, 0))
             .addOnSuccessListener { t ->
+                if (seq != captureSeq || moving) { busy = false; return@addOnSuccessListener }   // 읽는 사이 화면이 움직였다: 옛 결과
                 lastText = t
                 // 읽은 글자와 자리가 지난번과 같으면 라벨을 건드리지 않는다 (깜빡임·흔들림 방지)
                 val sig = t.textBlocks.joinToString("|") { b -> b.lines.joinToString("|") { "${it.text}@${it.boundingBox}" } }
@@ -335,8 +352,10 @@ class CaptureService : Service() {
     }
 
     /** 창이 열려 있는 동안은 캡처를 쉰다 (우리 창을 읽지 않도록) */
-    fun setPaused(p: Boolean) { paused = p; if (p) overlay?.labels = emptyList() else { lastGrid = null; lastSig = ""; tracked.clear() } }
-    fun refreshNow() { overlay?.coverMode = Prefs.coverOn(this); overlay?.labels = emptyList(); lastGrid = null; lastSig = ""; tracked.clear() }
+    fun setPaused(p: Boolean) { paused = p; if (p) overlay?.labels = emptyList() else restart() }
+    fun refreshNow() { overlay?.coverMode = Prefs.coverOn(this); restart() }
+    /** 처음부터 다시: 라벨 지우고 멈춤 타이머부터 */
+    private fun restart() { lastGrid = null; lastSig = ""; enterMoving() }
 
     companion object {
         const val ACTION_STOP = "app.chifan.STOP"

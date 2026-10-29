@@ -24,6 +24,9 @@ class Labeler(private val dict: Dict) {
         Rule(Regex("(\\d+)%\\s*好评")) { m -> "좋은 평 ${m.groupValues[1]}%" },
         Rule(Regex("(\\d+)选(\\d+)")) { m -> "${m.groupValues[1]}택${m.groupValues[2]}" },
         Rule(Regex("(\\d+)人餐")) { m -> "${m.groupValues[1]}인 세트" },
+        Rule(Regex("季售\\s*(\\d+)\\+?")) { m -> "시즌 ${m.groupValues[1]}+ 판매" },
+        Rule(Regex("(\\d+)条评价")) { m -> "리뷰 ${m.groupValues[1]}개" },
+        Rule(Regex("(\\d+)分钟送达")) { m -> "${m.groupValues[1]}분 내 배달" },
         Rule(Regex("[¥￥]\\s*\\d+(?:\\.\\d+)?")) { null },
         Rule(Regex("\\d+(?:\\.\\d+)?")) { null }
     )
