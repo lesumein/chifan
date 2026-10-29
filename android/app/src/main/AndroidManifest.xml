@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 다른 앱 위에 한국어 라벨과 떠다니는 버튼을 그리기 위해 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- 화면을 읽는 동안 상태바에 알림을 띄우는 포그라운드 서비스 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 인터넷 권한은 일부러 없다. 라이브러리가 끼워 넣어도 뺀다: 읽은 화면이 폰 밖으로 나갈 길을 막기 위해 -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
 
     <!-- 메이퇀 앱이 설치돼 있는지 확인하고 열기 위해 (Android 11+) -->
     <queries>
@@ -22,19 +33,11 @@
             </intent-filter>
         </activity>
 
-        <!-- 메이퇀 화면의 글자를 읽어 한국어를 덧그리는 접근성 서비스.
-             화면을 누르거나 조작하지 않는다 (canPerformGestures 없음). -->
+        <!-- 화면을 캡처해 폰 안 OCR로 중국어를 읽고, 그 위에 한국어 라벨을 그린다.
+             화면을 누르거나 조작하는 기능은 없다. -->
         <service
-            android:name=".ChifanService"
+            android:name=".CaptureService"
             android:exported="false"
-            android:label="@string/service_label"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
+            android:foregroundServiceType="mediaProjection" />
     </application>
 </manifest>

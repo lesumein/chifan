@@ -1,16 +1,19 @@
 package app.chifan
 
+import android.Manifest
 import android.app.Activity
-import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
@@ -19,12 +22,13 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 
-/** 설정 화면: 접근성 서비스 켜기 → 메이퇀 열기. 나머지는 메이퇀 위에 뜨는 버튼에서 한다. */
+/** 설정 화면: 다른 앱 위에 표시 허용 → 덧그리기 시작(화면 캡처 허용) → 메이퇀 열기. 나머지는 떠다니는 버튼에서. */
 class MainActivity : Activity() {
     private val d get() = resources.displayMetrics.density
     private fun dp(v: Int) = (v * d).toInt()
     private lateinit var status: TextView
-    private lateinit var stepBtn: Button
+    private lateinit var overlayBtn: Button
+    private lateinit var startBtn: Button
     private lateinit var meituanBtn: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,70 +39,97 @@ class MainActivity : Activity() {
             setPadding(dp(20), dp(28), dp(20), dp(28))
         }
         root.addView(text("치판 吃饭", 26f, getColor(R.color.ink), bold = true))
-        root.addView(text("중국 배달앱 화면에 한국어를 덧그리고, 메뉴 검색어를 복사해 줘요.", 15f, getColor(R.color.muted)))
+        root.addView(text("중국 앱 화면 위에 한국어 뜻을 덧그리고, 메뉴 검색어를 복사해 줘요.", 15f, getColor(R.color.muted)))
 
         status = text("", 15f, getColor(R.color.ink)).apply {
             background = round(0xFFFFFFFF.toInt(), 14); setPadding(dp(14), dp(12), dp(14), dp(12))
         }
         root.addView(status, lp(top = 18))
 
-        stepBtn = button("1. 접근성 서비스 켜기", primary = true) {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            Toast.makeText(this, "목록에서 ‘치판 한국어 덧그리기’를 찾아 켜 주세요", Toast.LENGTH_LONG).show()
+        overlayBtn = button("1. 다른 앱 위에 표시 허용") {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         }
-        root.addView(stepBtn, lp(top = 12))
+        root.addView(overlayBtn, lp(top = 12))
 
-        meituanBtn = button("2. 메이퇀 열기") { openMeituan() }
+        startBtn = button("2. 덧그리기 시작", primary = true) { toggleService() }
+        root.addView(startBtn, lp(top = 8))
+
+        meituanBtn = button("3. 메이퇀 열기") { openMeituan() }
         root.addView(meituanBtn, lp(top = 8))
 
         val sw = Switch(this).apply {
             text = "화면 글자에 한국어 라벨 붙이기"
             textSize = 15f; setTextColor(getColor(R.color.ink))
             isChecked = Prefs.labelsOn(this@MainActivity)
-            setOnCheckedChangeListener { _, on -> Prefs.setLabelsOn(this@MainActivity, on); ChifanService.instance?.refreshNow() }
+            setOnCheckedChangeListener { _, on -> Prefs.setLabelsOn(this@MainActivity, on); CaptureService.instance?.refreshNow() }
         }
         root.addView(sw, lp(top = 18))
 
         root.addView(text("이렇게 써요", 16f, getColor(R.color.ink), bold = true), lp(top = 22))
         root.addView(text(
-            "• 메이퇀을 열면 오른쪽에 치판 버튼이 떠요. 누르면 메뉴 고르기·요청사항·단어장이 작은 창으로 열려요.\n" +
-            "• 메뉴를 누르면 중국어 검색어가 복사돼요. 메이퇀 검색창을 길게 눌러 붙여넣으면 돼요.\n" +
-            "• 메이퇀 화면의 메뉴·옵션 글자 옆에 한국어 뜻이 작게 붙어요. 사전에 있는 말만 붙어요.\n" +
-            "• 버튼은 위아래로 끌어 옮길 수 있어요.", 14f, getColor(R.color.muted)))
+            "• [덧그리기 시작]을 누르면 폰이 화면 캡처를 허용할지 물어요. ‘전체 화면’으로 허용하세요. 읽는 동안 상태바에 표시돼요.\n" +
+            "• 메이퇀(또는 어떤 앱이든) 화면의 중국어 메뉴·옵션 글자 옆에 한국어 뜻이 작게 붙어요. 사전에 있는 말만 붙어요.\n" +
+            "• 오른쪽에 뜨는 치판 버튼을 누르면 메뉴 고르기·요청사항·단어장이 작은 창으로 열려요. 메뉴를 누르면 검색어가 복사돼요.\n" +
+            "• 버튼은 위아래로 끌어 옮길 수 있어요. 끝나면 알림의 [중지]나 여기 [중지]를 누르세요.", 14f, getColor(R.color.muted)))
 
         root.addView(text("하지 않는 것", 16f, getColor(R.color.ink), bold = true), lp(top = 18))
         root.addView(text(
-            "• 메이퇀 화면을 대신 누르거나 입력하지 않아요. 주문은 끝까지 직접 하세요.\n" +
-            "• 읽은 글자를 어디에도 보내지 않아요. 서버가 없고, 인터넷도 안 써요.\n" +
-            "• 메이퇀 앱이나 서버에 접근하지 않아요. 내 폰 화면을 내가 읽는 것뿐이에요.\n" +
-            "• 접근성 권한은 메이퇀 앱 화면에만 쓰도록 제한돼 있어요(다른 앱 화면은 들어오지 않음).", 14f, getColor(R.color.muted)))
+            "• 다른 앱 화면을 대신 누르거나 입력하지 않아요. 주문은 끝까지 직접 하세요.\n" +
+            "• 읽은 화면을 어디에도 보내지 않아요. 이 앱에는 인터넷 권한 자체가 없어요. 글자 인식은 폰 안에서만 돌아요.\n" +
+            "• 캡처한 화면을 저장하지 않아요. 글자를 읽자마자 버려요.\n" +
+            "• 메이퇀 앱이나 서버에 접근하지 않아요. 내 폰 화면을 내가 읽는 것뿐이에요.", 14f, getColor(R.color.muted)))
 
         root.addView(text("치판은 메이퇀과 관계없는 개인 도구예요. 메뉴 이름 중 ‘확인 중’ 표시는 중국어 표기를 아직 검증하지 못한 거예요.", 12f, getColor(R.color.muted)), lp(top = 18))
 
         setContentView(ScrollView(this).apply { addView(root) })
+
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
     }
 
     override fun onResume() { super.onResume(); refresh() }
 
     private fun refresh() {
-        val on = serviceEnabled()
-        val meituan = packageManager.getLaunchIntentForPackage(ChifanService.MEITUAN) != null
-        status.text = (if (on) "✓ 접근성 서비스 켜짐 — 메이퇀을 열면 버튼이 떠요" else "○ 접근성 서비스가 꺼져 있어요") + "\n" +
+        val overlayOk = Settings.canDrawOverlays(this)
+        val running = CaptureService.instance != null
+        val meituan = packageManager.getLaunchIntentForPackage(MEITUAN) != null
+        status.text = (if (overlayOk) "✓ 다른 앱 위에 표시: 허용됨" else "○ 다른 앱 위에 표시: 아직 허용 안 됨") + "\n" +
+            (if (running) "✓ 덧그리기 실행 중 — 다른 앱으로 가면 버튼이 떠요" else "○ 덧그리기 꺼짐") + "\n" +
             (if (meituan) "✓ 메이퇀 앱 있음" else "○ 메이퇀 앱이 없어요 — 아래 버튼으로 설치")
-        stepBtn.text = if (on) "접근성 설정 열기" else "1. 접근성 서비스 켜기"
-        meituanBtn.text = if (meituan) "2. 메이퇀 열기" else "2. 메이퇀 앱 설치하기"
+        overlayBtn.text = if (overlayOk) "다른 앱 위에 표시: 허용됨" else "1. 다른 앱 위에 표시 허용"
+        overlayBtn.isEnabled = !overlayOk
+        startBtn.text = if (running) "덧그리기 중지" else "2. 덧그리기 시작"
+        meituanBtn.text = if (meituan) "3. 메이퇀 열기" else "3. 메이퇀 앱 설치하기"
     }
 
-    private fun serviceEnabled(): Boolean {
-        val me = ComponentName(this, ChifanService::class.java).flattenToString()
-        val list = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
-        return list.split(':').any { it.equals(me, true) || it.equals(ComponentName(this, ChifanService::class.java).flattenToShortString(), true) }
+    private fun toggleService() {
+        if (CaptureService.instance != null) {
+            startService(Intent(this, CaptureService::class.java).setAction(CaptureService.ACTION_STOP))
+            status.postDelayed({ refresh() }, 300)
+            return
+        }
+        if (!Settings.canDrawOverlays(this)) { Toast.makeText(this, "먼저 1번 ‘다른 앱 위에 표시’를 허용해 주세요", Toast.LENGTH_LONG).show(); return }
+        val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAPTURE)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_CAPTURE) return
+        if (resultCode != RESULT_OK || data == null) { Toast.makeText(this, "화면 캡처를 허용해야 글자를 읽을 수 있어요", Toast.LENGTH_LONG).show(); return }
+        val i = Intent(this, CaptureService::class.java)
+            .putExtra(CaptureService.EXTRA_CODE, resultCode)
+            .putExtra(CaptureService.EXTRA_DATA, data)
+        startForegroundService(i)
+        Toast.makeText(this, "시작했어요. 메이퇀을 열면 오른쪽에 치판 버튼이 떠요", Toast.LENGTH_LONG).show()
+        status.postDelayed({ refresh() }, 500)
     }
 
     private fun openMeituan() {
-        val launch = packageManager.getLaunchIntentForPackage(ChifanService.MEITUAN)
+        val launch = packageManager.getLaunchIntentForPackage(MEITUAN)
         if (launch != null) { startActivity(launch); return }
-        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + ChifanService.MEITUAN))) }
+        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$MEITUAN"))) }
             .onFailure { Toast.makeText(this, "스토어에서 美团 을 검색해 설치해 주세요", Toast.LENGTH_LONG).show() }
     }
 
@@ -120,4 +151,9 @@ class MainActivity : Activity() {
     }
 
     private fun round(color: Int, radiusDp: Int) = GradientDrawable().apply { setColor(color); cornerRadius = radiusDp * d }
+
+    companion object {
+        const val MEITUAN = "com.sankuai.meituan"
+        private const val REQ_CAPTURE = 11
+    }
 }

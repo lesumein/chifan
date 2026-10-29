@@ -30,8 +30,8 @@ import android.widget.Toast
 import kotlin.math.abs
 
 /**
- * 메이퇀 위에 떠 있는 치판 버튼과, 누르면 열리는 작은 치판 창.
- * 창 안에서 메뉴를 고르면 중국어 검색어가 복사된다. 메이퇀 화면을 누르는 일은 없다.
+ * 다른 앱 위에 떠 있는 치판 버튼과, 누르면 열리는 작은 치판 창.
+ * 창 안에서 메뉴를 고르면 중국어 검색어가 복사된다. 다른 앱 화면을 누르는 일은 없다.
  */
 class Bubble(private val ctx: Context, private val wm: WindowManager, private val dict: Dict) {
     private val d = ctx.resources.displayMetrics.density
@@ -111,6 +111,7 @@ class Bubble(private val ctx: Context, private val wm: WindowManager, private va
     private fun closePanel() {
         panelView?.let { runCatching { wm.removeView(it) } }
         panelView = null
+        CaptureService.instance?.setPaused(false)
     }
 
     // ---------- 창 ----------
@@ -141,9 +142,13 @@ class Bubble(private val ctx: Context, private val wm: WindowManager, private va
             text = "한국어 라벨 "
             setTextColor(muted); textSize = 13f
             isChecked = Prefs.labelsOn(ctx)
-            setOnCheckedChangeListener { _, on -> Prefs.setLabelsOn(ctx, on); ChifanService.instance?.refreshNow() }
+            setOnCheckedChangeListener { _, on -> Prefs.setLabelsOn(ctx, on); CaptureService.instance?.refreshNow() }
         }
         head.addView(sw)
+        head.addView(TextView(ctx).apply {
+            text = "중지"; textSize = 13f; setTextColor(muted); setPadding(dp(10), dp(4), dp(6), dp(4))
+            setOnClickListener { ctx.startService(android.content.Intent(ctx, CaptureService::class.java).setAction(CaptureService.ACTION_STOP)) }
+        })
         head.addView(TextView(ctx).apply {
             text = "✕"; textSize = 20f; setTextColor(muted); setPadding(dp(12), dp(4), dp(4), dp(4))
             setOnClickListener { closePanel() }
@@ -191,6 +196,7 @@ class Bubble(private val ctx: Context, private val wm: WindowManager, private va
         lp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         wm.addView(root, lp)
         panelView = root
+        CaptureService.instance?.setPaused(true)
         render()
     }
 
@@ -365,6 +371,6 @@ class Bubble(private val ctx: Context, private val wm: WindowManager, private va
     }
 
     companion object {
-        private const val OVERLAY = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+        private const val OVERLAY = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
     }
 }
