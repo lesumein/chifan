@@ -48,10 +48,12 @@ def group(lines, is_word=lambda w: False):
             p['text'] = join(p['text'], ln['text'].strip())
             p['box'] = [min(l, pl), min(t, pt), max(r, pr), max(b, pb)]
             p['rows'].append(ln['box']); p['n'] += 1
+            p['parts'].append((ln['text'].strip(), list(ln['box'])))
             attached = True
             break
         if not attached:
-            paras.append({'text': ln['text'].strip(), 'box': list(ln['box']), 'rows': [ln['box']], 'n': 1})
+            paras.append({'text': ln['text'].strip(), 'box': list(ln['box']), 'rows': [ln['box']], 'n': 1,
+                          'parts': [(ln['text'].strip(), list(ln['box']))]})
     return paras
 
 

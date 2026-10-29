@@ -62,11 +62,13 @@ class OverlayView(ctx: Context) : View(ctx) {
             var limit = width.toFloat(); var llimit = 0f
             for (o in obs) {
                 if (o == b || o.bottom < b.top || o.top > b.bottom) continue
-                if (o.left >= b.right - 2) limit = minOf(limit, o.left - 4 * d)
+                if (o.left >= b.right - 2 || o.left > b.left + 0.6f * b.width()) limit = minOf(limit, o.left - 4 * d)   // 상자가 맞닿거나 살짝 겹쳐도 오른쪽 글자면 장애물
                 else if (o.right <= b.left + 2) llimit = maxOf(llimit, o.right + 4 * d)
             }
             val r = RectF(b.left - 3 * d, b.top - 2 * d, minOf(b.right + 3 * d, width.toFloat()), b.bottom + 2 * d)
             if (done.any { o -> val ix = maxOf(0f, minOf(r.right, o.right) - maxOf(r.left, o.left)); val iy = maxOf(0f, minOf(r.bottom, o.bottom) - maxOf(r.top, o.top)); ix * iy > 0.3f * r.width() * r.height() }) continue
+            for (o in done) if (!(o.bottom < r.top || o.top > r.bottom) && o.left < r.left && r.left < o.right - 2 * d) r.left = o.right + 2 * d   // 먼저 그린 라벨이 내 왼쪽 끝을 덮고 있으면 그 뒤에서 시작
+            if (r.width() < 10 * d) continue
             val avail = r.width() - 11 * d
             val rowH = b.height() / l.rows               // 두 줄로 접힌 이름은 줄 수만큼 나눠 덮는다
             val minSz = minOf(minSize, rowH * 0.95f)   // 원문이 아주 작으면 최소 크기도 줄 높이 안으로 (넘치면 아래 라벨에 가려 잘린다)
@@ -78,11 +80,12 @@ class OverlayView(ctx: Context) : View(ctx) {
             // 안 들어가면 먼저 오른쪽 빈 자리(다음 글자 직전)까지 넓히고, 그래도 안 되면 글자를 줄인다
             if (w > avail) {
                 // 넓히기: 먼저 오른쪽(다음 글자 직전까지), 모자라면 왼쪽(앞 글자·앞 라벨 직후까지) — 가운데 정렬된 칸에 빈 곳이 많다
+                for (o in done) if (!(o.bottom < r.top || o.top > r.bottom) && o.left >= r.left) limit = minOf(limit, o.left - 2 * d)   // 먼저 그린 라벨(같은 줄, 오른쪽)도 장애물
                 val extra = minOf(w - avail, limit - r.right)
                 if (extra > 0) r.right += extra
                 for (o in done) if (!(o.bottom < r.top || o.top > r.bottom) && o.right <= r.left + 2) llimit = maxOf(llimit, o.right + 2 * d)
                 val need = w - (r.width() - 11 * d)
-                if (need > 0) r.left -= maxOf(0f, minOf(need, r.left - llimit, 3 * rowH))   // 왼쪽은 줄 높이 3배까지만 (OCR은 사진을 모른다: 썸네일 위로 뻗지 않게)
+                if (need > 0) r.left -= maxOf(0f, minOf(need, r.left - llimit, minOf(3 * rowH, 24 * d)))   // 왼쪽은 줄 높이 3배까지만 (OCR은 사진을 모른다: 썸네일 위로 뻗지 않게)
             }
             val avail2 = r.width() - 11 * d
             if (w > avail2) {   // 그래도 안 되면 자르기 전에 간격부터 줄인다 ("쓰촨 · 간식" → "쓰촨·간식")

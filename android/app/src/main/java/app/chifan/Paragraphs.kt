@@ -13,7 +13,10 @@ object Paragraphs {
         val h get() = b - t
         val w get() = r - l
     }
-    class Para(var text: String, val box: Box, var n: Int = 1)
+    class Para(var text: String, val box: Box, var n: Int = 1) {
+        /** 합치기 전 줄들 (합친 문단이 안 읽히면 줄마다 따로 읽는다) */
+        val parts = ArrayList<Pair<String, Box>>()
+    }
 
     fun group(lines: List<Pair<String, Box>>, isWord: (String) -> Boolean = { false }): List<Para> {
         val paras = ArrayList<Para>()
@@ -32,10 +35,11 @@ object Paragraphs {
                 p.text = join(p.text, text)
                 pb.l = minOf(pb.l, bx.l); pb.t = minOf(pb.t, bx.t); pb.r = maxOf(pb.r, bx.r); pb.b = maxOf(pb.b, bx.b)
                 p.n++
+                p.parts.add(text to Box(bx.l, bx.t, bx.r, bx.b))
                 attached = true
                 break
             }
-            if (!attached) paras.add(Para(text, Box(bx.l, bx.t, bx.r, bx.b)))
+            if (!attached) paras.add(Para(text, Box(bx.l, bx.t, bx.r, bx.b)).also { it.parts.add(text to Box(bx.l, bx.t, bx.r, bx.b)) })
         }
         return paras
     }

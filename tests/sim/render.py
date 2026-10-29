@@ -31,7 +31,15 @@ def render(img_path, ocr_path, out_path, dp=None):
     drawn = []
     report = []
     from paragraph import group, split_label
-    paras = group(lines, is_word=lambda w: dic.exact(w) is not None)
+    paras0 = group(lines, is_word=lambda w: dic.exact(w) is not None)
+    # 합친 문단이 안 읽히면 줄마다 따로 (Kotlin toLabels 와 같음)
+    paras = []
+    for p0 in paras0:
+        if p0['n'] > 1 and not label(dic, p0['text']):
+            for t, bx in p0['parts']:
+                paras.append({'text': t, 'box': bx, 'rows': [bx], 'n': 1, 'parts': [(t, bx)]})
+        else:
+            paras.append(p0)
     boxes = [p['box'] for p in paras]
     for pr in sorted(paras, key=lambda p: (p['box'][1], p['box'][0])):
         l, t, r, b = pr['box']
@@ -41,7 +49,7 @@ def render(img_path, ocr_path, out_path, dp=None):
         for o in boxes:
             if o is pr['box'] or o[3] < t or o[1] > b:
                 continue
-            if o[0] >= r - 2:
+            if o[0] >= r - 2 or o[0] > l + 0.6 * (r - l):   # 상자가 맞닿거나 살짝 겹쳐도 오른쪽 글자면 장애물
                 limit = min(limit, o[0] - 4 * dp)
             elif o[2] <= l + 2:
                 llimit = max(llimit, o[2] + 4 * dp)
@@ -60,6 +68,11 @@ def render(img_path, ocr_path, out_path, dp=None):
                 skip = True; break
         if skip:
             continue
+        for d in drawn:   # 먼저 그린 라벨이 내 왼쪽 끝을 덮고 있으면 그 뒤에서 시작
+            if not (d[3] < box[1] or d[1] > box[3]) and d[0] < box[0] < d[2] - 2 * dp:
+                box[0] = d[2] + 2 * dp
+        if box[2] - box[0] < 10 * dp:
+            continue
         rows = split_label(text, n)
         if len(rows) < n:      # 조각이 줄 수보다 적으면 윗줄만 덮는다
             box[3] = box[1] + 4 * dp + row_h * len(rows)
@@ -70,6 +83,9 @@ def render(img_path, ocr_path, out_path, dp=None):
         w = max(draw.textlength(rw, font=font) for rw in rows)
         if w > avail:
             # 넓히기: 먼저 오른쪽(다음 글자 직전까지), 모자라면 왼쪽(앞 글자·앞 라벨 직후까지) — 가운데 정렬된 칸(분류 표)에 빈 곳이 많다
+            for d in drawn:   # 먼저 그린 라벨(같은 줄, 오른쪽)도 장애물
+                if not (d[3] < box[1] or d[1] > box[3]) and d[0] >= box[2] - 2 * dp - (r - l):
+                    if d[0] >= box[0]: limit = min(limit, d[0] - 2 * dp)
             extra = min(w - avail, limit - box[2])
             if extra > 0:
                 box[2] += extra
@@ -78,7 +94,7 @@ def render(img_path, ocr_path, out_path, dp=None):
                     llimit = max(llimit, d[2] + 2 * dp)
             need = w - ((box[2] - box[0]) - 11 * dp)
             if need > 0:
-                box[0] -= max(0, min(need, box[0] - llimit, 3 * row_h))   # 왼쪽은 줄 높이 3배까지만 (OCR은 사진을 모른다: 썸네일 위로 뻗지 않게)
+                box[0] -= max(0, min(need, box[0] - llimit, min(3 * row_h, 24 * dp)))   # 왼쪽은 줄 높이 3배까지만 (OCR은 사진을 모른다: 썸네일 위로 뻗지 않게)
             avail = (box[2] - box[0]) - 11 * dp
         if w > avail:
             # 그래도 안 되면 자르기 전에 간격부터 줄인다 ("쓰촨 · 간식" → "쓰촨·간식")

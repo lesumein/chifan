@@ -74,7 +74,7 @@ class CaptureService : Service() {
         main.postDelayed({
             rebuildPending = false
             val t = lastText ?: return@postDelayed
-            draw(toLabels(t), t.textBlocks.flatMap { b -> b.lines.mapNotNull { it.boundingBox } })
+            draw(toLabels(t, lastMasks), t.textBlocks.flatMap { b -> b.lines.mapNotNull { it.boundingBox } }.filter { b -> lastMasks.none { overlap(it, b) > 0.4f } }, true)
         }, 150)
     }
 
@@ -158,11 +158,9 @@ class CaptureService : Service() {
         },
         cancel = { key -> timers.remove(key)?.let { main.removeCallbacks(it) } },
         actions = object : FrameGate.Actions {
-            override fun clearLabels() { main.post { tracked.clear(); lastSig = ""; overlay?.labels = emptyList() } }
-            override fun hideLabels() { main.post { overlay?.visibility = android.view.View.INVISIBLE } }
-            override fun showLabels() { main.post { overlay?.visibility = android.view.View.VISIBLE } }
+            override fun clearLabels() { main.post { tracked.clear(); lastSig = ""; lastLabelSig = ""; overlay?.labels = emptyList() } }
             override fun nudge() { overlay?.nudge() }
-            override fun recognize(frameId: Int, seq: Int) { currentBmp?.let { recognize(it, seq) } }
+            override fun recognize(frameId: Int, seq: Int, withLabels: Boolean) { currentBmp?.let { recognize(it, seq, withLabels) } }
         }
     )
     private val gateLock = Any()
@@ -185,9 +183,11 @@ class CaptureService : Service() {
 
     /**
      * 새 라벨을 기존 라벨과 맞춰 본다. 같은 글자가 거의 같은 자리에 있으면 기존 라벨(자리 포함)을 그대로 쓴다.
-     * OCR은 같은 화면도 매번 상자가 몇 px씩 달라서, 이 단계가 없으면 라벨이 계속 옮겨 다닌다. 안 읽힌 라벨은 바로 지운다.
+     * OCR은 같은 화면도 매번 상자가 몇 px씩 달라서, 이 단계가 없으면 라벨이 계속 옮겨 다닌다.
+     * keep: 라벨을 띄운 채 읽은 결과(작은 변화) — 라벨 아래 글자는 못 읽으니 안 읽힌 옛 라벨도 그대로 둔다.
+     * 아니면(큰 변화 뒤 깨끗한 화면) 안 읽힌 라벨은 지운다.
      */
-    private fun merge(fresh: List<OverlayView.Label>): List<OverlayView.Label> {
+    private fun merge(fresh: List<OverlayView.Label>, keep: Boolean): List<OverlayView.Label> {
         val used = BooleanArray(fresh.size)
         val out = ArrayList<OverlayView.Label>()
         for (old in tracked) {
@@ -199,6 +199,7 @@ class CaptureService : Service() {
                 out.add(if (fresh[i].text.length > old.text.length) fresh[i] else old)
                 break
             }
+            if (keep && out.lastOrNull() !== old && fresh.none { overlap(it.bounds, old.bounds) > 0.3f }) out.add(old)
         }
         for (i in fresh.indices) if (!used[i]) out.add(fresh[i])
         tracked = out
@@ -211,10 +212,20 @@ class CaptureService : Service() {
             Math.abs(a.right - b.right) <= tol * 2 && Math.abs(a.bottom - b.bottom) <= tol
     }
 
-    /** 라벨을 다시 그린다. 그 직후 들어올 프레임은 기준 화면으로만 쓴다. */
-    private fun draw(labels: List<OverlayView.Label>, boxes: List<Rect>) {
-        synchronized(gateLock) { gate.onDrawn() }
-        overlay?.set(merge(labels), boxes)
+    private var lastLabelSig = ""
+    /** 라벨을 다시 그린다. 그 직후 들어올 프레임은 기준 화면으로만 쓴다. 라벨이 실제로 바뀌었으면 작은-변화 늦추기를 처음으로. */
+    private fun draw(labels: List<OverlayView.Label>, boxes: List<Rect>, keep: Boolean) {
+        val merged = merge(labels, keep)
+        val sig = merged.joinToString("|") { "${it.text}@${it.bounds}" }
+        if (sig == lastLabelSig) return          // 그대로면 건드리지 않는다 (깜빡임·흔들림 방지)
+        synchronized(gateLock) { gate.onDrawn(); gate.onChanged() }
+        lastLabelSig = sig
+        overlay?.set(merged, boxes + merged.map { it.bounds })
+    }
+    private fun overlap(a: Rect, b: Rect): Float {
+        val x = Rect(); if (!x.setIntersect(a, b)) return 0f
+        val area = minOf(a.width() * a.height(), b.width() * b.height()).toFloat()
+        return if (area <= 0) 0f else x.width() * x.height() / area
     }
 
     /** 화면을 32×64 밝기 격자로 줄인다. 맨 위 4줄(상태바: 시계·배터리)은 비교에서 뺀다. */
@@ -229,7 +240,12 @@ class CaptureService : Service() {
         return g
     }
 
-    private fun recognize(bmp: Bitmap, seq: Int) {
+    private var lastMasks: List<Rect> = emptyList()
+    private var lastKeep = false
+
+    /** withLabels: 라벨이 떠 있는 화면 — 라벨 아래 줄은 버리고(우리 한국어를 다시 읽지 않게) 옛 라벨은 둔다 */
+    private fun recognize(bmp: Bitmap, seq: Int, withLabels: Boolean) {
+        val masks = if (withLabels) overlay?.drawnRects() ?: emptyList() else emptyList()
         recognizer.process(InputImage.fromBitmap(bmp, 0))
             .addOnSuccessListener { t ->
                 if (!synchronized(gateLock) { gate.onResult(seq) }) return@addOnSuccessListener   // 읽는 사이 화면이 움직였다: 옛 결과
@@ -238,7 +254,8 @@ class CaptureService : Service() {
                 val sig = t.textBlocks.joinToString("|") { b -> b.lines.joinToString("|") { "${it.text}@${it.boundingBox}" } }
                 if (sig != lastSig) {
                     lastSig = sig
-                    draw(toLabels(t), t.textBlocks.flatMap { b -> b.lines.mapNotNull { it.boundingBox } })
+                    lastMasks = masks; lastKeep = withLabels
+                    draw(toLabels(t, masks), t.textBlocks.flatMap { b -> b.lines.mapNotNull { it.boundingBox } }.filter { b -> masks.none { overlap(it, b) > 0.4f } }, withLabels)
                 }
             }
             .addOnFailureListener { synchronized(gateLock) { gate.onResult(-1) } }
@@ -253,7 +270,7 @@ class CaptureService : Service() {
      * OCR 결과 → 라벨. 줄마다 Labeler(숫자 규칙 → 사전 조각 → 한자음)로 만든다.
      * 기계 번역은 설정에서 켠 경우에만, 사전 조각이 하나도 없는 줄에 쓴다 (영어를 거쳐 품질이 낮다).
      */
-    private fun toLabels(t: Text): List<OverlayView.Label> {
+    private fun toLabels(t: Text, masks: List<Rect> = emptyList()): List<OverlayView.Label> {
         val out = ArrayList<OverlayView.Label>()
         val seen = ArrayList<Pair<String, String?>>()
         val lines = ArrayList<Pair<String, Rect>>()
@@ -261,23 +278,28 @@ class CaptureService : Service() {
         val found = ArrayList<Pair<String, Paragraphs.Box>>()
         for (block in t.textBlocks) for (line in block.lines) for ((raw, box) in splitByGap(line)) {
             if (!hasHan(raw)) continue
+            if (masks.any { overlap(it, box) > 0.4f }) continue      // 우리 라벨 아래(또는 우리 라벨 자체)
             lines.add(raw to Rect(box))
             found.add(raw to Paragraphs.Box(box.left, box.top, box.right, box.bottom))
         }
         // 두 줄로 접힌 이름은 합쳐서 읽는다 (Paragraphs)
         for (p in Paragraphs.group(found, isWord = { dict.exact(it) != null })) {
-            val raw = p.text
-            val box = Rect(p.box.l, p.box.t, p.box.r, p.box.b)
-            val r = labeler.label(raw)
-            if (r?.text != null) {
-                out.add(OverlayView.Label(box, r.text, r.kind, p.n)); seen.add(raw to r.text)
-            } else if (useMt && (r == null || !r.known) && sentenceLike(raw)) {   // 사전이 못 읽은 '문장'(리뷰·안내문)만 기계 번역
-                val lt = clean(raw)
-                val mt = Mt.cached(lt)
-                if (mt == null) { Mt.request(lt) { scheduleRebuild() }; seen.add(raw to r?.full) }
-                else if (mt.isNotEmpty() && !hasHan(mt)) { out.add(OverlayView.Label(box, mt, OverlayView.Label.MT, p.n)); seen.add(raw to "$mt ⟨번역⟩") }   // 한자가 남은 번역("荤米线")은 버린다
-                else seen.add(raw to r?.full)
-            } else seen.add(raw to r?.full)
+            val r = labeler.label(p.text)
+            // 합친 문단이 안 읽히면 줄마다 따로 (두 줄 제목의 둘째 줄 "牛排150G+意面+饮品"은 혼자서는 읽힌다)
+            val units = if (r?.text == null && p.n > 1) p.parts.map { Triple(it.first, it.second, 1) } else listOf(Triple(p.text, p.box, p.n))
+            for ((raw, b, rows) in units) {
+                val box = Rect(b.l, b.t, b.r, b.b)
+                val rr = if (units.size == 1) r else labeler.label(raw)
+                if (rr?.text != null) {
+                    out.add(OverlayView.Label(box, rr.text, rr.kind, rows)); seen.add(raw to rr.text)
+                } else if (useMt && (rr == null || !rr.known) && sentenceLike(raw)) {   // 사전이 못 읽은 '문장'(리뷰·안내문)만 기계 번역
+                    val lt = clean(raw)
+                    val mt = Mt.cached(lt)
+                    if (mt == null) { Mt.request(lt) { scheduleRebuild() }; seen.add(raw to rr?.full) }
+                    else if (mt.isNotEmpty() && !hasHan(mt)) { out.add(OverlayView.Label(box, mt, OverlayView.Label.MT, rows)); seen.add(raw to "$mt ⟨번역⟩") }   // 한자가 남은 번역("荤米线")은 버린다
+                    else seen.add(raw to rr?.full)
+                } else seen.add(raw to rr?.full)
+            }
             if (out.size >= MAX_LABELS) break
         }
         lastOcr = seen
@@ -321,8 +343,11 @@ class CaptureService : Service() {
 
     /** 한자·숫자·영문만 남긴다 (한글 라벨이 줄에 섞여 읽혀도 매칭이 깨지지 않게) */
     private fun clean(s: String) = s.replace(Regex("[^\\u3400-\\u9FFF0-9A-Za-z]"), "")
-    /** 기계 번역을 맡길 만한 줄: 한자 10자 이상이거나 문장 부호가 있는 것. 짧은 제목(菌锅米线)은 번역기가 "냄비 냄비 线" 같은 걸 만들어 원문보다 나쁘다 */
-    private fun sentenceLike(s: String) = s.count { it in '㐀'..'鿿' } >= 10 || s.any { it in "，。！？、；：" }
+    /**
+     * 기계 번역을 맡길 만한 줄: 문장 부호가 있거나 한자 16자 이상인 것 (리뷰·안내문).
+     * 메뉴 제목(菌锅米线, 【单人超值】美洲原切西冷)은 번역기가 "냄비 냄비 线", "미국 오리지널 커팅의 단일 가치"를 만들어 원문보다 나쁘다.
+     */
+    private fun sentenceLike(s: String) = s.count { it in '㐀'..'鿿' } >= 16 || s.any { it in "，。！？；～~" }
 
     private fun overlapRatio(a: Rect, line: Rect): Float {
         val x = Rect()

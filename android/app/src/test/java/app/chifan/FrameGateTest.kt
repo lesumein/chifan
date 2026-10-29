@@ -19,10 +19,8 @@ class FrameGateTest {
         cancel = { key -> timers.remove(key) },
         actions = object : FrameGate.Actions {
             override fun clearLabels() { log.add("clear") }
-            override fun hideLabels() { log.add("hide") }
-            override fun showLabels() { log.add("show") }
             override fun nudge() { log.add("nudge") }
-            override fun recognize(frameId: Int, seq: Int) { log.add("recognize#$frameId seq$seq") }
+            override fun recognize(frameId: Int, seq: Int, withLabels: Boolean) { log.add("recognize#$frameId seq$seq" + if (withLabels) " +labels" else "") }
         }
     )
     private var frameId = 0
@@ -112,19 +110,41 @@ class FrameGateTest {
         assertEquals("recognize#$id seq2", log.last())
     }
 
-    @Test fun `썸네일 로딩 같은 작은 변화엔 라벨을 지우지 않고 한 프레임만 숨겨 다시 읽는다`() {
+    @Test fun `썸네일 로딩 같은 작은 변화엔 라벨을 지우지도 숨기지도 않고 띄운 채 다시 읽는다`() {
         frame(10); settleAndRead(10); gate.onResult(1); gate.onDrawn(); frame(12)
         log.clear()
         advance(300); frame(80, changedCells = 10)     // 10% 칸만 바뀜 (이미지 하나 로딩)
         assertTrue(gate.moving); assertTrue(gate.soft)
         assertTrue(log.isEmpty())                       // 지우지 않음
-        advance(200)                                    // 멈춤 → 숨기기
-        assertEquals(listOf("hide"), log)
-        advance(20); val id = frame(80, changedCells = 10)   // 숨긴 뒤 들어온 깨끗한 프레임 → 읽고 바로 되살림
-        assertEquals(listOf("hide", "recognize#$id seq2", "show"), log)
+        advance(200)                                    // 멈춤 → 프레임 요청
+        assertEquals(listOf("nudge"), log)
+        advance(20); val id = frame(80, changedCells = 10)
+        assertEquals(listOf("nudge", "recognize#$id seq2 +labels"), log)   // 라벨 띄운 채 읽기, 숨기기 없음
         assertTrue(gate.onResult(2))
-        gate.onDrawn(); frame(12)                       // 그려진 프레임 = 기준
         assertFalse(gate.moving)
+    }
+
+    @Test fun `1초마다 바뀌는 카운트다운은 라벨을 건드리지 않고 점점 늦게 읽는다`() {
+        frame(10); settleAndRead(10); gate.onResult(1); gate.onDrawn(); frame(12)
+        log.clear()
+        var v = 100; val reads = ArrayList<Long>()
+        repeat(40) {                                    // 40초 동안 1초마다 카운트다운 한 칸 (3% 칸)
+            v = if (v == 100) 200 else 100
+            frame(v, changedCells = 3)
+            repeat(50) {                                // 20ms 단위로 1초: nudge 하면 실제 폰처럼 다음 틱에 프레임이 온다
+                val n = log.size
+                advance(20)
+                if (log.size > n && log.last() == "nudge") {
+                    val before = log.size
+                    frame(v, changedCells = 3)
+                    if (log.size > before && log.last().startsWith("recognize")) { reads.add(clock); gate.onResult(gate.captureSeq) }   // 결과 같음: onChanged 안 부름
+                }
+            }
+        }
+        assertFalse(log.contains("clear"))              // 한 번도 지우지 않음
+        assertTrue("읽기 횟수 ${reads.size}", reads.size in 4..20)   // 1초마다(40번)가 아니라 늦춰짐
+        val gaps = reads.zipWithNext { a, b -> b - a }
+        assertTrue("간격 $gaps", gaps.last() >= 3000)
     }
 
     @Test fun `작은 변화로 시작했다가 크게 바뀌면 라벨을 지운다`() {

@@ -55,6 +55,12 @@ RULES = [
     (re.compile(r'(\d+)条评价'), lambda m: f"리뷰 {m.group(1)}개"),
     (re.compile(r'(\d+)%\s*好评率?'), lambda m: f"호평 {m.group(1)}%"),
     (re.compile(r'好评\s*(\d+)%'), lambda m: f"호평 {m.group(1)}%"),
+    (re.compile(r'[Tt]骨'), lambda m: "티본"),
+    (re.compile(r'(\d+)\s*-\s*(\d+)(?=专区|神券|神劵|券)'), lambda m: f"{m.group(1)}↑ -{m.group(2)}"),
+    (re.compile(r'立省\s*[¥￥]?\s*(\d+(?:\.\d+)?)'), lambda m: f"¥{m.group(1)} 즉시 할인"),
+    (re.compile(r'(\d+:\d+)\s*后配送'), lambda m: f"{m.group(1)} 이후 배달"),
+    (re.compile(r'(\d+)人觉得'), lambda m: f"{m.group(1)}명이"),
+    (re.compile(r'低至\s*[¥￥]?(\d+(?:\.\d+)?)'), lambda m: f"최저 ¥{m.group(1)}"),
     (re.compile(r'(\d+)号(?!楼)'), lambda m: f"{m.group(1)}번지"),
     (re.compile(r'仅剩\s*(\d+:\d+:\d+)'), lambda m: f"{m.group(1)} 남음"),
     (re.compile(r'仅剩\s*(\d+)\s*份'), lambda m: f"{m.group(1)}개 남음"),
@@ -103,7 +109,7 @@ RULES = [
 
 
 # 단어 안에서도 한 글자로 읽는 글자: 조리 동사·모양·기본 음식 (메뉴 이름은 'A炒B', 'A丁' 식의 조합)
-BOUND = set('小大酱盒夹团圆角馍菜藕花膏饮糊杯扒干醋茶汁奶冻鸡鸭鱼虾肉蛋粉鲜香嫩脆酥辣炒蒸炖煎烧拌煲焖炸烤卤爆煮炝熘涮焗烩酿熏丁丝片块条球卷段末泥饭面粥汤羹饼包糕')
+BOUND = set('配小大酱盒夹团圆角馍菜藕花膏饮糊杯扒干醋茶汁奶冻鸡鸭鱼虾肉蛋粉鲜香嫩脆酥辣炒蒸炖煎烧拌煲焖炸烤卤爆煮炝熘涮焗烩酿熏丁丝片块条球卷段末泥饭面粥汤羹饼包糕')
 
 
 def best(dic, s, i):
