@@ -8,9 +8,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- 인터넷 권한은 일부러 없다. 라이브러리가 끼워 넣어도 뺀다: 읽은 화면이 폰 밖으로 나갈 길을 막기 위해 -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <!-- 인터넷은 번역 모델을 한 번 내려받는 데만 쓴다. 화면에서 읽은 글자는 보내지 않는다 (코드에 보내는 곳이 없음). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- 메이퇀 앱이 설치돼 있는지 확인하고 열기 위해 (Android 11+) -->
     <queries>

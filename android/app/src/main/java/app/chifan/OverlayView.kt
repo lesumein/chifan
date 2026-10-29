@@ -10,7 +10,10 @@ import android.view.View
 
 /** 메이퇀 화면 위에 한국어 라벨을 그리는 전체 화면 뷰. 터치는 받지 않는다(아래 앱으로 그대로 통과). */
 class OverlayView(ctx: Context) : View(ctx) {
-    class Label(val bounds: Rect, val text: String, val isFood: Boolean)
+    /** kind: 0 사전, 1 메뉴 이름, 2 기계 번역 */
+    class Label(val bounds: Rect, val text: String, val kind: Int) {
+        companion object { const val DICT = 0; const val FOOD = 1; const val MT = 2 }
+    }
 
     @Volatile var labels: List<Label> = emptyList()
         set(v) { field = v; postInvalidate() }
@@ -25,6 +28,7 @@ class OverlayView(ctx: Context) : View(ctx) {
     }
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6C2462E.toInt() }
     private val bgFood = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xF0A2502E.toInt() }
+    private val bgMt = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE63F5F7F.toInt() }   // 기계 번역은 파란 회색
     private val pad = 4f * d
     private val radius = 5f * d
     private val loc = IntArray(2)
@@ -64,7 +68,7 @@ class OverlayView(ctx: Context) : View(ctx) {
             if (r == null) continue
             taken.add(r)
             synchronized(drawn) { drawn.add(Rect((r.left + loc[0]).toInt(), (r.top + loc[1]).toInt(), (r.right + loc[0]).toInt(), (r.bottom + loc[1]).toInt())) }
-            c.drawRoundRect(r, radius, radius, if (l.isFood) bgFood else bgPaint)
+            c.drawRoundRect(r, radius, radius, when (l.kind) { Label.FOOD -> bgFood; Label.MT -> bgMt; else -> bgPaint })
             c.drawText(text, r.left + pad, r.top + pad - fm.ascent, textPaint)
         }
     }

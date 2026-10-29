@@ -7,6 +7,8 @@ object Prefs {
     private fun p(ctx: Context) = ctx.getSharedPreferences("chifan", Context.MODE_PRIVATE)
     fun labelsOn(ctx: Context) = p(ctx).getBoolean("labels", true)
     fun setLabelsOn(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("labels", v).apply()
+    fun mtOn(ctx: Context) = p(ctx).getBoolean("mt", true)
+    fun setMtOn(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("mt", v).apply()
     fun bubbleY(ctx: Context) = p(ctx).getInt("bubbleY", -1)
     fun setBubbleY(ctx: Context, y: Int) = p(ctx).edit().putInt("bubbleY", y).apply()
     fun memo(ctx: Context): MutableSet<String> = HashSet(p(ctx).getStringSet("memo", emptySet()) ?: emptySet())

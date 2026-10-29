@@ -33,7 +33,7 @@ import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
  * 화면을 캡처해 폰 안 OCR로 중국어를 읽고, 사전에 있는 말 옆에 한국어 라벨을 그린다.
  *
  * 하는 것: 화면 캡처(사용자가 허용한 동안만, 상태바에 표시됨), 폰 안 글자 인식, 라벨 그리기, 검색어 복사.
- * 안 하는 것: 어떤 앱도 누르거나 조작하지 않는다. 인터넷 권한이 없어 읽은 화면은 폰 밖으로 나가지 않는다.
+ * 안 하는 것: 어떤 앱도 누르거나 조작하지 않는다. 읽은 화면·글자는 폰 밖으로 보내지 않는다 (인터넷은 번역 모델 내려받기에만).
  * 어느 앱이든 한자가 보이면 동작한다 (메이퇀에 묶여 있지 않음).
  */
 class CaptureService : Service() {
@@ -62,6 +62,21 @@ class CaptureService : Service() {
         instance = this
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         dict = Dict.get(this)
+        // 번역 모델이 있는지 확인. 없으면 와이파이에서 조용히 받아 둔다 (설정 화면에서 직접 받을 수도 있음)
+        Mt.check { ok -> if (!ok) Mt.download(wifiOnly = true) { _, _ -> } }
+    }
+
+    private var lastText: Text? = null
+    private var rebuildPending = false
+    /** 번역 결과가 도착하면 마지막 OCR 결과로 라벨만 다시 만든다 (새 캡처 없이) */
+    private fun scheduleRebuild() {
+        if (rebuildPending) return
+        rebuildPending = true
+        main.postDelayed({
+            rebuildPending = false
+            val t = lastText ?: return@postDelayed
+            overlay?.set(toLabels(t), t.textBlocks.flatMap { b -> b.lines.mapNotNull { it.boundingBox } })
+        }, 150)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -162,6 +177,7 @@ class CaptureService : Service() {
     private fun recognize(bmp: Bitmap) {
         recognizer.process(InputImage.fromBitmap(bmp, 0))
             .addOnSuccessListener { t ->
+                lastText = t
                 val boxes = t.textBlocks.flatMap { b -> b.lines.mapNotNull { it.boundingBox } }
                 overlay?.set(toLabels(t), boxes); busy = false
             }
@@ -178,6 +194,7 @@ class CaptureService : Service() {
     private fun toLabels(t: Text): List<OverlayView.Label> {
         val out = ArrayList<OverlayView.Label>()
         val seen = ArrayList<Pair<String, String?>>()
+        val useMt = Mt.ready && Prefs.mtOn(this)
         // 우리가 그린 라벨이 다음 캡처에서 다시 읽히는 것 방지: 라벨 자리를 절반 넘게 차지하는 줄은 버린다
         val own = overlay?.drawnRects() ?: emptyList()
         for (block in t.textBlocks) for (line in block.lines) {
@@ -186,20 +203,31 @@ class CaptureService : Service() {
             val lt = clean(line.text)
             if (!hasHan(lt)) continue
             val whole = dict.exact(lt)
-            if (whole != null) { out.add(OverlayView.Label(box, whole.ko, whole.foodId != null)); seen.add(lt to whole.ko); continue }
+            if (whole != null) { out.add(OverlayView.Label(box, whole.ko, kindOf(whole))); seen.add(lt to whole.ko); continue }
             val elLabels = ArrayList<String>()
             for (el in line.elements) {
                 val et = clean(el.text); val eb = el.boundingBox ?: continue
                 val h = dict.exact(et) ?: continue
-                out.add(OverlayView.Label(eb, h.ko, h.foodId != null)); elLabels.add(h.ko)
+                out.add(OverlayView.Label(eb, h.ko, kindOf(h))); elLabels.add(h.ko)
             }
             if (elLabels.isNotEmpty()) { seen.add(lt to elLabels.joinToString(" · ")); continue }
+            // 사전에 통째로 없는 줄: 폰 안 번역이 준비돼 있으면 번역, 아니면 줄 안에서 찾은 말을 이어 붙인다
+            if (useMt) {
+                val mt = Mt.cached(lt)
+                if (mt == null) Mt.request(lt) { scheduleRebuild() }
+                else if (mt.isNotEmpty()) {
+                    val s = if (mt.length > 28) mt.substring(0, 27) + "…" else mt
+                    out.add(OverlayView.Label(box, s, OverlayView.Label.MT)); seen.add(lt to "$mt ⟨번역⟩")
+                    if (out.size >= MAX_LABELS) break
+                    continue
+                }
+            }
             val hits = dict.annotate(lt).filter { it.zh.length >= 2 }
             val han = lt.count { it in '\u3400'..'\u9FFF' }
             if (hits.isEmpty() || hits.sumOf { it.zh.length } * 2 < han) { seen.add(lt to null); continue }
             val shown = hits.distinctBy { it.zh }.take(3)
             val s = shown.joinToString(" · ") { it.ko } + if (hits.size > 3) " …" else ""
-            out.add(OverlayView.Label(box, s, shown.any { it.foodId != null }))
+            out.add(OverlayView.Label(box, s, if (shown.any { it.foodId != null }) OverlayView.Label.FOOD else OverlayView.Label.DICT))
             seen.add(lt to s)
             if (out.size >= MAX_LABELS) break
         }
@@ -209,6 +237,8 @@ class CaptureService : Service() {
 
     /** 한자·숫자·영문만 남긴다 (한글 라벨이 줄에 섞여 읽혀도 매칭이 깨지지 않게) */
     private fun clean(s: String) = s.replace(Regex("[^\\u3400-\\u9FFF0-9A-Za-z]"), "")
+
+    private fun kindOf(h: Hit) = if (h.foodId != null) OverlayView.Label.FOOD else OverlayView.Label.DICT
 
     private fun overlapRatio(a: Rect, line: Rect): Float {
         val x = Rect()

@@ -30,6 +30,8 @@ class MainActivity : Activity() {
     private lateinit var overlayBtn: Button
     private lateinit var startBtn: Button
     private lateinit var meituanBtn: Button
+    private lateinit var mtBtn: Button
+    private var mtReady = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,25 +59,46 @@ class MainActivity : Activity() {
         meituanBtn = button("3. 메이퇀 열기") { openMeituan() }
         root.addView(meituanBtn, lp(top = 8))
 
+        mtBtn = button("번역 모델 받기 (약 60MB, 한국에서 미리)") {
+            Toast.makeText(this, "받는 중… 와이파이에서 1~2분 걸려요", Toast.LENGTH_LONG).show()
+            mtBtn.isEnabled = false
+            Mt.download(wifiOnly = false) { ok, err ->
+                runOnUiThread {
+                    Toast.makeText(this, if (ok) "번역 모델을 받았어요. 이제 오프라인에서도 번역돼요" else "받지 못했어요: ${err ?: "네트워크 확인"}", Toast.LENGTH_LONG).show()
+                    refresh()
+                }
+            }
+        }
+        root.addView(mtBtn, lp(top = 8))
+
+        val swMt = Switch(this).apply {
+            text = "사전에 없는 말은 폰 안 번역으로 (파란 라벨)"
+            textSize = 15f; setTextColor(getColor(R.color.ink))
+            isChecked = Prefs.mtOn(this@MainActivity)
+            setOnCheckedChangeListener { _, on -> Prefs.setMtOn(this@MainActivity, on); CaptureService.instance?.refreshNow() }
+        }
+        root.addView(swMt, lp(top = 18))
+
         val sw = Switch(this).apply {
             text = "화면 글자에 한국어 라벨 붙이기"
             textSize = 15f; setTextColor(getColor(R.color.ink))
             isChecked = Prefs.labelsOn(this@MainActivity)
             setOnCheckedChangeListener { _, on -> Prefs.setLabelsOn(this@MainActivity, on); CaptureService.instance?.refreshNow() }
         }
-        root.addView(sw, lp(top = 18))
+        root.addView(sw, lp(top = 8))
 
         root.addView(text("이렇게 써요", 16f, getColor(R.color.ink), bold = true), lp(top = 22))
         root.addView(text(
             "• [덧그리기 시작]을 누르면 폰이 화면 캡처를 허용할지 물어요. ‘전체 화면’으로 허용하세요. 읽는 동안 상태바에 표시돼요.\n" +
-            "• 메이퇀(또는 어떤 앱이든) 화면의 중국어 메뉴·옵션 글자 옆에 한국어 뜻이 작게 붙어요. 사전에 있는 말만 붙어요.\n" +
+            "• 메이퇀(또는 어떤 앱이든) 화면의 중국어 글자 옆에 한국어 뜻이 붙어요. 빨강·갈색은 직접 만든 사전, 파랑은 폰 안 기계 번역이에요.\n" +
+            "• 번역 모델은 한 번만 받으면 돼요. 중국에선 받을 수 없으니 한국에서 미리 받아 두세요. 받은 뒤엔 인터넷 없이 돌아요.\n" +
             "• 오른쪽에 뜨는 치판 버튼을 누르면 메뉴 고르기·요청사항·단어장이 작은 창으로 열려요. 메뉴를 누르면 검색어가 복사돼요.\n" +
             "• 버튼은 위아래로 끌어 옮길 수 있어요. 끝나면 알림의 [중지]나 여기 [중지]를 누르세요.", 14f, getColor(R.color.muted)))
 
         root.addView(text("하지 않는 것", 16f, getColor(R.color.ink), bold = true), lp(top = 18))
         root.addView(text(
             "• 다른 앱 화면을 대신 누르거나 입력하지 않아요. 주문은 끝까지 직접 하세요.\n" +
-            "• 읽은 화면을 어디에도 보내지 않아요. 이 앱에는 인터넷 권한 자체가 없어요. 글자 인식은 폰 안에서만 돌아요.\n" +
+            "• 읽은 화면·글자를 어디에도 보내지 않아요. 글자 인식도 번역도 폰 안에서만 돌아요. 인터넷은 번역 모델을 받을 때만 써요.\n" +
             "• 캡처한 화면을 저장하지 않아요. 글자를 읽자마자 버려요.\n" +
             "• 메이퇀 앱이나 서버에 접근하지 않아요. 내 폰 화면을 내가 읽는 것뿐이에요.", 14f, getColor(R.color.muted)))
 
@@ -87,7 +110,7 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
     }
 
-    override fun onResume() { super.onResume(); refresh() }
+    override fun onResume() { super.onResume(); refresh(); Mt.check { ok -> runOnUiThread { mtReady = ok; refresh() } } }
 
     private fun refresh() {
         val overlayOk = Settings.canDrawOverlays(this)
@@ -95,11 +118,14 @@ class MainActivity : Activity() {
         val meituan = packageManager.getLaunchIntentForPackage(MEITUAN) != null
         status.text = (if (overlayOk) "✓ 다른 앱 위에 표시: 허용됨" else "○ 다른 앱 위에 표시: 아직 허용 안 됨") + "\n" +
             (if (running) "✓ 덧그리기 실행 중 — 다른 앱으로 가면 버튼이 떠요" else "○ 덧그리기 꺼짐") + "\n" +
-            (if (meituan) "✓ 메이퇀 앱 있음" else "○ 메이퇀 앱이 없어요 — 아래 버튼으로 설치")
+            (if (meituan) "✓ 메이퇀 앱 있음" else "○ 메이퇀 앱이 없어요 — 아래 버튼으로 설치") + "\n" +
+            (if (mtReady) "✓ 번역 모델 있음 — 오프라인 번역 가능" else "○ 번역 모델이 없어요 — 사전에 있는 말만 뜻이 붙어요")
         overlayBtn.text = if (overlayOk) "다른 앱 위에 표시: 허용됨" else "1. 다른 앱 위에 표시 허용"
         overlayBtn.isEnabled = !overlayOk
         startBtn.text = if (running) "덧그리기 중지" else "2. 덧그리기 시작"
         meituanBtn.text = if (meituan) "3. 메이퇀 열기" else "3. 메이퇀 앱 설치하기"
+        mtBtn.text = if (mtReady) "번역 모델: 받음" else "번역 모델 받기 (약 60MB, 한국에서 미리)"
+        mtBtn.isEnabled = !mtReady
     }
 
     private fun toggleService() {
