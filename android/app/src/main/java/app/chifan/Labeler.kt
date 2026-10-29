@@ -36,24 +36,22 @@ class Labeler(private val dict: Dict) {
         var i = 0
         while (i < s.length) {
             val c = s[i]
-            // 1) 숫자 규칙
+            // 1) 숫자 규칙 (사전보다 먼저: 已减11元 → 11위안 할인됨)
             var matched = false
-            if (c.isDigit() || c == '¥' || c == '￥') {
-                for (r in rules) {
-                    val m = r.re.find(s, i) ?: continue
-                    if (m.range.first != i) continue
-                    flushHanja()
-                    r.f(m)?.let { parts.add(Part(it, OverlayView.Label.DICT)); dictParts++ }
-                    i = m.range.last + 1; matched = true; break
-                }
-                if (matched) continue
+            for (r in rules) {
+                val m = r.re.find(s, i) ?: continue
+                if (m.range.first != i) continue
+                flushHanja()
+                r.f(m)?.let { parts.add(Part(it, OverlayView.Label.DICT)); dictParts++ }
+                i = m.range.last + 1; matched = true; break
             }
+            if (matched) continue
             if (!isHan(c)) { flushHanja(); i++; continue }   // 기호·영문은 경계
             // 2) 사전: 가장 긴 말부터 (규칙에 걸리는 말은 사전보다 규칙 우선이므로 숫자 뒤 글자는 위에서 처리됨)
             val hit = longest(s, i)
             if (hit != null) {
                 flushHanja()
-                parts.add(Part(hit.ko, if (hit.foodId != null) OverlayView.Label.FOOD else OverlayView.Label.DICT))
+                parts.add(Part(stripNote(hit.ko), if (hit.foodId != null) OverlayView.Label.FOOD else OverlayView.Label.DICT))
                 dictParts++; if (hit.foodId != null) anyFood = true
                 i += hit.zh.length; continue
             }
@@ -71,12 +69,25 @@ class Labeler(private val dict: Dict) {
         return Result(if (text.length > 34) text.substring(0, 33) + "…" else text, kind, dictParts, hanjaChars)
     }
 
-    /** s[i..]에서 사전에 있는 가장 긴 말 (뒤의 기호·공백은 건너뛰지 않음) */
+    /** 라벨용 뜻: 괄호 설명은 뗀다 ("고명 (면 위 토핑)" → "고명") */
+    private fun stripNote(ko: String) = ko.replace(Regex("\\s*[(（][^)）]*[)）]"), "").trim().ifEmpty { ko }
+
+    /**
+     * s[i..]에서 사전에 있는 가장 긴 말. 한 글자짜리 말(满·减·元…)은 앞뒤에 한자가 없을 때만 —
+     * 안 그러면 渝满天 같은 가게 이름이 "투 · ~이상이면 · 천"으로 쪼개진다.
+     */
     private fun longest(s: String, i: Int): Hit? {
         var n = minOf(dict.maxLen, s.length - i)
         while (n >= 1) {
             val w = s.substring(i, i + n)
-            if (w.all { isHan(it) }) dict.exact(w)?.let { return it }
+            if (w.all { isHan(it) }) {
+                val h = dict.exact(w)
+                if (h != null) {
+                    if (n > 1) return h
+                    val prevHan = i > 0 && isHan(s[i - 1]); val nextHan = i + 1 < s.length && isHan(s[i + 1])
+                    if (!prevHan && !nextHan) return h
+                }
+            }
             n--
         }
         return null
