@@ -11,8 +11,8 @@ android {
         applicationId = "app.chifan"
         minSdk = 26
         targetSdk = 35
-        versionCode = 15
-        versionName = "0.15"
+        versionCode = 16
+        versionName = "0.16"
         // OCR 네이티브 라이브러리가 CPU 종류마다 10MB씩이라 arm64(2017년 이후 폰)만 넣는다
         ndk { abiFilters += listOf("arm64-v8a") }
     }
@@ -38,4 +38,6 @@ dependencies {
     implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
     // 폰 안 번역(중→한). 모델(약 60MB)은 설정 화면에서 한 번 내려받고, 그 뒤엔 오프라인으로 돈다.
     implementation("com.google.mlkit:translate:17.0.3")
+    // 스크롤 상태 기계(FrameGate) 단위 테스트
+    testImplementation("junit:junit:4.13.2")
 }
