@@ -193,9 +193,10 @@ class CaptureService : Service() {
         for (old in tracked) {
             for (i in fresh.indices) {
                 if (used[i] || !near(fresh[i].bounds, old.bounds)) continue
-                // 같은 자리: 글자가 같으면 옛 것(자리째) 유지. 다르면 OCR이 매번 조금씩 다르게 읽은 것 — 더 긴(정보 많은) 쪽을 둔다
+                // 같은 자리: 글자가 같으면 옛 것(자리째) 유지. 다르면 더 긴(정보 많은) 쪽을 — 새 쪽이면 상자도 새 것으로
+                // (0.21까지는 옛 상자에 새 글자를 넣어, 짧게 읽혔던 줄의 좁은 상자에 긴 라벨이 들어가 …로 잘렸다)
                 used[i] = true
-                out.add(if (fresh[i].text.length > old.text.length) OverlayView.Label(old.bounds, fresh[i].text, fresh[i].kind, fresh[i].rows) else old)
+                out.add(if (fresh[i].text.length > old.text.length) fresh[i] else old)
                 break
             }
         }
@@ -270,11 +271,11 @@ class CaptureService : Service() {
             val r = labeler.label(raw)
             if (r?.text != null) {
                 out.add(OverlayView.Label(box, r.text, r.kind, p.n)); seen.add(raw to r.text)
-            } else if (useMt && (r == null || !r.known)) {          // 사전이 못 읽은 줄(리뷰·안내문)만 기계 번역
+            } else if (useMt && (r == null || !r.known) && sentenceLike(raw)) {   // 사전이 못 읽은 '문장'(리뷰·안내문)만 기계 번역
                 val lt = clean(raw)
                 val mt = Mt.cached(lt)
                 if (mt == null) { Mt.request(lt) { scheduleRebuild() }; seen.add(raw to r?.full) }
-                else if (mt.isNotEmpty()) { out.add(OverlayView.Label(box, mt, OverlayView.Label.MT, p.n)); seen.add(raw to "$mt ⟨번역⟩") }
+                else if (mt.isNotEmpty() && !hasHan(mt)) { out.add(OverlayView.Label(box, mt, OverlayView.Label.MT, p.n)); seen.add(raw to "$mt ⟨번역⟩") }   // 한자가 남은 번역("荤米线")은 버린다
                 else seen.add(raw to r?.full)
             } else seen.add(raw to r?.full)
             if (out.size >= MAX_LABELS) break
@@ -320,6 +321,8 @@ class CaptureService : Service() {
 
     /** 한자·숫자·영문만 남긴다 (한글 라벨이 줄에 섞여 읽혀도 매칭이 깨지지 않게) */
     private fun clean(s: String) = s.replace(Regex("[^\\u3400-\\u9FFF0-9A-Za-z]"), "")
+    /** 기계 번역을 맡길 만한 줄: 한자 10자 이상이거나 문장 부호가 있는 것. 짧은 제목(菌锅米线)은 번역기가 "냄비 냄비 线" 같은 걸 만들어 원문보다 나쁘다 */
+    private fun sentenceLike(s: String) = s.count { it in '㐀'..'鿿' } >= 10 || s.any { it in "，。！？、；：" }
 
     private fun overlapRatio(a: Rect, line: Rect): Float {
         val x = Rect()

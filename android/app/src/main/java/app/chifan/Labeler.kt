@@ -34,6 +34,9 @@ class Labeler(private val dict: Dict) {
         r("(\\d+)条评价") { m -> "리뷰 ${m.groupValues[1]}개" },
         r("(\\d+)%\\s*好评率?") { m -> "호평 ${m.groupValues[1]}%" },
         r("好评\\s*(\\d+)%") { m -> "호평 ${m.groupValues[1]}%" },
+        r("仅剩\\s*(\\d+:\\d+:\\d+)") { m -> "${m.groupValues[1]} 남음" },
+        r("仅剩\\s*(\\d+)\\s*份") { m -> "${m.groupValues[1]}개 남음" },
+        keep("\\d+:\\d+:\\d+"),
         r("(\\d+)瓶") { m -> "${m.groupValues[1]}병" },
         r("(\\d+)份") { m -> "${m.groupValues[1]}인분" },
         keep("\\d{4}[/.-]\\d{1,2}[/.-]\\d{1,2}"),              // 날짜

@@ -55,6 +55,9 @@ RULES = [
     (re.compile(r'(\d+)条评价'), lambda m: f"리뷰 {m.group(1)}개"),
     (re.compile(r'(\d+)%\s*好评率?'), lambda m: f"호평 {m.group(1)}%"),
     (re.compile(r'好评\s*(\d+)%'), lambda m: f"호평 {m.group(1)}%"),
+    (re.compile(r'仅剩\s*(\d+:\d+:\d+)'), lambda m: f"{m.group(1)} 남음"),
+    (re.compile(r'仅剩\s*(\d+)\s*份'), lambda m: f"{m.group(1)}개 남음"),
+    (re.compile(r'\d+:\d+:\d+'), 'keep'),
     (re.compile(r'(\d+)瓶'), lambda m: f"{m.group(1)}병"),
     (re.compile(r'(\d+)份'), lambda m: f"{m.group(1)}인분"),
     (re.compile(r'\d{4}[/.-]\d{1,2}[/.-]\d{1,2}'), 'keep'),       # 날짜
