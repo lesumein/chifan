@@ -34,6 +34,7 @@ class Labeler(private val dict: Dict) {
         r("(\\d+)条评价") { m -> "리뷰 ${m.groupValues[1]}개" },
         r("(\\d+)%\\s*好评率?") { m -> "호평 ${m.groupValues[1]}%" },
         r("好评\\s*(\\d+)%") { m -> "호평 ${m.groupValues[1]}%" },
+        r("(\\d+)号(?!楼)") { m -> "${m.groupValues[1]}번지" },
         r("仅剩\\s*(\\d+:\\d+:\\d+)") { m -> "${m.groupValues[1]} 남음" },
         r("仅剩\\s*(\\d+)\\s*份") { m -> "${m.groupValues[1]}개 남음" },
         keep("\\d+:\\d+:\\d+"),
@@ -91,6 +92,7 @@ class Labeler(private val dict: Dict) {
         val parts = ArrayList<String>(); val fullParts = ArrayList<String>()
         var hanja = StringBuilder(); var strong = 0; var anyFood = false
         var covered = 0; val total = s.count { isHan(it) }
+        var covEnd = 0   // 읽은 한자 구간의 끝 (메뉴 이름의 머리 명사는 끝에 온다)
         fun flushHanja() { if (hanja.isNotEmpty()) { fullParts.add(hanja.toString()); hanja = StringBuilder() } }
         var i = 0
         while (i < s.length) {
@@ -102,6 +104,7 @@ class Labeler(private val dict: Dict) {
                 if (rule.keep) { val t = m.value.replace("￥", "¥").replace(" ", ""); parts.add(t); fullParts.add(t) }
                 else {
                     covered += m.value.count { isHan(it) }
+                    if (m.value.any { isHan(it) }) covEnd = m.range.last + 1
                     rule.f!!(m)?.let { if (it.isNotEmpty()) { parts.add(it); fullParts.add(it); strong++ } }
                 }
                 i = m.range.last + 1; matched = true; break
@@ -109,11 +112,11 @@ class Labeler(private val dict: Dict) {
             if (matched) continue
             val c = s[i]
             if (!isHan(c)) { flushHanja(); i++; continue }
-            val hit = longest(s, i)
+            val hit = best(s, i)
             if (hit != null) {
                 flushHanja()
                 val ko = stripNote(hit.short).replace("🌶", "").trim()
-                covered += hit.zh.length
+                covered += hit.zh.length; covEnd = i + hit.zh.length
                 fullParts.add(stripNote(hit.ko).ifEmpty { hit.ko })
                 if (ko.isNotEmpty()) {
                     parts.add(ko)
@@ -129,9 +132,11 @@ class Labeler(private val dict: Dict) {
         if (fullParts.isEmpty()) return null
         val full = fullParts.joinToString(" · ")
         val kind = if (anyFood) OverlayView.Label.FOOD else OverlayView.Label.DICT
-        val need = if (total > 12) 0.75f else 0.6f
+        val need = if (total > 12) 0.75f else if (total <= 8) 0.5f else 0.6f   // 짧은 메뉴 이름은 모르는 수식어 하나쯤 있어도 덮는다
         val price = priceStart.containsMatchIn(s)
-        val coverOk = covered >= need * total && !price
+        val lastHan = s.indexOfLast { isHan(it) }
+        val headOk = total > 8 || covEnd > lastHan   // 짧은 이름은 끝(음식 본체)을 읽어야 덮는다: 湖南糖粑 → "후난" 같은 오해 방지
+        val coverOk = covered >= need * total && !price && headOk
         val text = if (parts.isEmpty() || strong == 0 || !coverOk) null else parts.joinToString(" · ")
         // 가격 줄·지점 이름처럼 '읽었지만 덮을 게 없는' 줄은 known: 기계 번역이 엉뚱한 말을 만들지 않게
         val known = price || covered >= need * total
@@ -145,8 +150,29 @@ class Labeler(private val dict: Dict) {
      * s[i..]에서 사전에 있는 가장 긴 말. 한 글자짜리 말(满·减·元…)은 앞뒤에 한자가 없을 때만 —
      * 안 그러면 渝满天 같은 가게 이름이 "투 · ~이상이면 · 천"으로 쪼개진다.
      */
-    private fun longest(s: String, i: Int): Hit? {
-        var n = minOf(dict.maxLen, s.length - i)
+    /** 단어 안에서도 한 글자로 읽는 글자: 조리 동사·모양·기본 음식 (메뉴 이름은 'A炒B', 'A丁' 식의 조합) */
+    private val BOUND = "小大酱盒夹团圆角馍菜藕花膏饮糊杯扒干醋茶汁奶冻鸡鸭鱼虾肉蛋粉鲜香嫩脆酥辣炒蒸炖煎烧拌煲焖炸烤卤爆煮炝熘涮焗烩酿熏丁丝片块条球卷段末泥饭面粥汤羹饼包糕".toSet()
+
+    /**
+     * 가장 긴 말. 단 그 말 바로 뒤가 읽히지 않으면, 더 짧게 잘라 다음 말이 더 멀리 이어지는 쪽을 고른다
+     * (家常菜谱: 家常菜+谱 → 家常+菜谱, 大肉馅: 大肉+馅 → 大+肉馅)
+     */
+    private fun best(s: String, i: Int): Hit? {
+        val hit = longest(s, i) ?: return null
+        val end = i + hit.zh.length
+        if (end < s.length && isHan(s[end]) && longest(s, end) == null) {
+            for (n in hit.zh.length - 1 downTo 1) {
+                val h2 = longest(s, i, n) ?: continue
+                val e2 = i + h2.zh.length
+                val nxt = longest(s, e2)
+                if (nxt != null && e2 + nxt.zh.length > end) return h2
+            }
+        }
+        return hit
+    }
+
+    private fun longest(s: String, i: Int, maxN: Int = 99): Hit? {
+        var n = minOf(dict.maxLen, s.length - i, maxN)
         while (n >= 1) {
             val w = s.substring(i, i + n)
             if (w.all { isHan(it) }) {
@@ -154,7 +180,7 @@ class Labeler(private val dict: Dict) {
                 if (h != null) {
                     if (n > 1) return h
                     val prevHan = i > 0 && isHan(s[i - 1]); val nextHan = i + 1 < s.length && isHan(s[i + 1])
-                    if (!prevHan && !nextHan) return h
+                    if ((!prevHan && !nextHan) || w[0] in BOUND) return h
                 }
             }
             n--

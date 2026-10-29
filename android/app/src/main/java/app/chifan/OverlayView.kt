@@ -59,24 +59,37 @@ class OverlayView(ctx: Context) : View(ctx) {
         for (l in ls.sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))) {
             val b = RectF((l.bounds.left - loc[0]).toFloat(), (l.bounds.top - loc[1]).toFloat(), (l.bounds.right - loc[0]).toFloat(), (l.bounds.bottom - loc[1]).toFloat())
             if (b.height() < 6 * d || b.width() < 10 * d) continue
-            var limit = width.toFloat()
-            for (o in obs) if (o.left >= b.right - 2 && !(o.bottom < b.top || o.top > b.bottom) && o != b) limit = minOf(limit, o.left - 4 * d)
+            var limit = width.toFloat(); var llimit = 0f
+            for (o in obs) {
+                if (o == b || o.bottom < b.top || o.top > b.bottom) continue
+                if (o.left >= b.right - 2) limit = minOf(limit, o.left - 4 * d)
+                else if (o.right <= b.left + 2) llimit = maxOf(llimit, o.right + 4 * d)
+            }
             val r = RectF(b.left - 3 * d, b.top - 2 * d, minOf(b.right + 3 * d, width.toFloat()), b.bottom + 2 * d)
             if (done.any { o -> val ix = maxOf(0f, minOf(r.right, o.right) - maxOf(r.left, o.left)); val iy = maxOf(0f, minOf(r.bottom, o.bottom) - maxOf(r.top, o.top)); ix * iy > 0.3f * r.width() * r.height() }) continue
             val avail = r.width() - 11 * d
             val rowH = b.height() / l.rows               // 두 줄로 접힌 이름은 줄 수만큼 나눠 덮는다
-            var size = (rowH * 0.72f).coerceIn(minSize, maxSize)
+            val minSz = minOf(minSize, rowH * 0.95f)   // 원문이 아주 작으면 최소 크기도 줄 높이 안으로 (넘치면 아래 라벨에 가려 잘린다)
+            var size = (rowH * 0.72f).coerceIn(minSz, maxSize)
             coverText.textSize = size
             var rows = Paragraphs.splitLabel(l.text, l.rows)
             if (rows.size < l.rows) r.bottom = r.top + 4 * d + rowH * rows.size      // 조각이 줄 수보다 적으면 윗줄만 덮는다
             var w = rows.maxOf { coverText.measureText(it) }
             // 안 들어가면 먼저 오른쪽 빈 자리(다음 글자 직전)까지 넓히고, 그래도 안 되면 글자를 줄인다
             if (w > avail) {
+                // 넓히기: 먼저 오른쪽(다음 글자 직전까지), 모자라면 왼쪽(앞 글자·앞 라벨 직후까지) — 가운데 정렬된 칸에 빈 곳이 많다
                 val extra = minOf(w - avail, limit - r.right)
                 if (extra > 0) r.right += extra
+                for (o in done) if (!(o.bottom < r.top || o.top > r.bottom) && o.right <= r.left + 2) llimit = maxOf(llimit, o.right + 2 * d)
+                val need = w - (r.width() - 11 * d)
+                if (need > 0) r.left -= maxOf(0f, minOf(need, r.left - llimit, 3 * rowH))   // 왼쪽은 줄 높이 3배까지만 (OCR은 사진을 모른다: 썸네일 위로 뻗지 않게)
             }
             val avail2 = r.width() - 11 * d
-            while (w > avail2 && size > minSize) { size -= 1 * d; coverText.textSize = size; w = rows.maxOf { coverText.measureText(it) } }
+            if (w > avail2) {   // 그래도 안 되면 자르기 전에 간격부터 줄인다 ("쓰촨 · 간식" → "쓰촨·간식")
+                rows = rows.map { it.replace(" · ", "·") }
+                w = rows.maxOf { coverText.measureText(it) }
+            }
+            while (w > avail2 && size > minSz) { size -= 1 * d; coverText.textSize = size; w = rows.maxOf { coverText.measureText(it) } }
             rows = rows.map { var t = it
                 // 안 들어가면 먼저 띄어쓰기를 빼 보고("월 0 판매"→"월0판매"), 그래도 안 되면 …로 자른다
                 if (coverText.measureText(t) > avail2 && ' ' in t && " · " !in t && coverText.measureText(t.replace(" ", "")) <= avail2) t = t.replace(" ", "")

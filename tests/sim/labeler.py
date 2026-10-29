@@ -55,6 +55,7 @@ RULES = [
     (re.compile(r'(\d+)条评价'), lambda m: f"리뷰 {m.group(1)}개"),
     (re.compile(r'(\d+)%\s*好评率?'), lambda m: f"호평 {m.group(1)}%"),
     (re.compile(r'好评\s*(\d+)%'), lambda m: f"호평 {m.group(1)}%"),
+    (re.compile(r'(\d+)号(?!楼)'), lambda m: f"{m.group(1)}번지"),
     (re.compile(r'仅剩\s*(\d+:\d+:\d+)'), lambda m: f"{m.group(1)} 남음"),
     (re.compile(r'仅剩\s*(\d+)\s*份'), lambda m: f"{m.group(1)}개 남음"),
     (re.compile(r'\d+:\d+:\d+'), 'keep'),
@@ -101,8 +102,30 @@ RULES = [
 ]
 
 
-def longest(dic, s, i):
-    n = min(dic.max_len, len(s) - i)
+# 단어 안에서도 한 글자로 읽는 글자: 조리 동사·모양·기본 음식 (메뉴 이름은 'A炒B', 'A丁' 식의 조합)
+BOUND = set('小大酱盒夹团圆角馍菜藕花膏饮糊杯扒干醋茶汁奶冻鸡鸭鱼虾肉蛋粉鲜香嫩脆酥辣炒蒸炖煎烧拌煲焖炸烤卤爆煮炝熘涮焗烩酿熏丁丝片块条球卷段末泥饭面粥汤羹饼包糕')
+
+
+def best(dic, s, i):
+    """가장 긴 말. 단 그 말 바로 뒤가 읽히지 않으면, 더 짧게 잘라 다음 말이 더 멀리 이어지는 쪽을 고른다
+    (家常菜谱: 家常菜+谱 → 家常+菜谱, 大肉馅: 大肉+馅 → 大+肉馅)"""
+    hit = longest(dic, s, i)
+    if not hit:
+        return None
+    end = i + len(hit[0])
+    if end < len(s) and is_han(s[end]) and not longest(dic, s, end):
+        for n in range(len(hit[0]) - 1, 0, -1):
+            h2 = longest(dic, s, i, n)
+            if not h2:
+                continue
+            e2 = i + len(h2[0]); nxt = longest(dic, s, e2)
+            if nxt and e2 + len(nxt[0]) > end:
+                return h2
+    return hit
+
+
+def longest(dic, s, i, maxn=99):
+    n = min(dic.max_len, len(s) - i, maxn)
     while n >= 1:
         w = s[i:i + n]
         if all(is_han(c) for c in w):
@@ -112,7 +135,7 @@ def longest(dic, s, i):
                     return w, h
                 prev_han = i > 0 and is_han(s[i - 1])
                 next_han = i + 1 < len(s) and is_han(s[i + 1])
-                if not prev_han and not next_han:
+                if (not prev_han and not next_han) or w in BOUND:
                     return w, h
         n -= 1
     return None
@@ -134,6 +157,7 @@ def label(dic, raw):
     parts, kinds = [], []
     strong = 0
     covered = 0
+    cov_end = 0          # 읽은 한자 구간의 끝 (메뉴 이름의 머리 명사는 끝에 온다)
     total = sum(1 for c in s if is_han(c))
     i = 0
     while i < len(s):
@@ -147,6 +171,7 @@ def label(dic, raw):
             else:
                 t = f(m)
                 covered += sum(1 for c in m.group(0) if is_han(c))
+                if any(is_han(c) for c in m.group(0)): cov_end = m.end()
                 if t:
                     parts.append(t); kinds.append(DICT); strong += 1
             i = m.end(); matched = True
@@ -156,11 +181,11 @@ def label(dic, raw):
         c = s[i]
         if not is_han(c):
             i += 1; continue
-        hit = longest(dic, s, i)
+        hit = best(dic, s, i)
         if hit:
             w, (short, ko, food) = hit
             ko = strip_note(short).replace('🌶', '').strip()
-            covered += len(w)
+            covered += len(w); cov_end = i + len(w)
             if ko:
                 parts.append(ko); kinds.append(FOOD if food else DICT)
                 if len(w) >= 2 or food or len(s) == 1:   # 한 글자 칩(热·大·小)은 줄 전체가 그 글자일 때만 인정
@@ -169,8 +194,11 @@ def label(dic, raw):
         i += 1   # 사전에 없는 한자: 건너뜀
     if not parts or strong == 0:
         return None
-    need = 0.75 if total > 12 else 0.6
+    need = 0.75 if total > 12 else (0.5 if total <= 8 else 0.6)   # 짧은 메뉴 이름은 모르는 수식어 하나쯤 있어도 덮는다
     if covered < need * total:
+        return None
+    last_han = max(k for k, c in enumerate(s) if is_han(c))
+    if total <= 8 and cov_end <= last_han:   # 짧은 이름은 끝(음식 본체)을 읽어야 덮는다: 湖南糖粑 → "후난" 같은 오해 방지
         return None
     text = ' · '.join(parts)
     kind = FOOD if FOOD in kinds else DICT

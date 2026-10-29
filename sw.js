@@ -1,5 +1,5 @@
 // 오프라인용 서비스워커. 파일을 바꾸면 VERSION을 올릴 것.
-var VERSION = 'chifan-v30';
+var VERSION = 'chifan-v31';
 var CORE = [
   './',
   'index.html',

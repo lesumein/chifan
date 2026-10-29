@@ -37,12 +37,14 @@ def render(img_path, ocr_path, out_path, dp=None):
         l, t, r, b = pr['box']
         n = pr['n']; row_h = (b - t) / n
         # 오른쪽으로 넓힐 수 있는 한계: 같은 높이에 있는 다음 글자 상자 직전까지
-        limit = W
+        limit = W; llimit = 0
         for o in boxes:
-            if o is pr['box']:
+            if o is pr['box'] or o[3] < t or o[1] > b:
                 continue
-            if o[0] >= r - 2 and not (o[3] < t or o[1] > b):
+            if o[0] >= r - 2:
                 limit = min(limit, o[0] - 4 * dp)
+            elif o[2] <= l + 2:
+                llimit = max(llimit, o[2] + 4 * dp)
         res = label(dic, pr['text'])
         report.append((pr['text'], res[0] if res else None))
         if not res:
@@ -61,16 +63,28 @@ def render(img_path, ocr_path, out_path, dp=None):
         rows = split_label(text, n)
         if len(rows) < n:      # 조각이 줄 수보다 적으면 윗줄만 덮는다
             box[3] = box[1] + 4 * dp + row_h * len(rows)
-        size = max(8 * dp, min(17 * dp, row_h * 0.72))
+        minsz = min(8 * dp, row_h * 0.95)   # 원문이 아주 작으면 최소 크기도 줄 높이 안으로 (넘치면 아래 라벨에 가려 잘린다)
+        size = max(minsz, min(17 * dp, row_h * 0.72))
         font = ImageFont.truetype(FONT, int(size))
         avail = (box[2] - box[0]) - 11 * dp
         w = max(draw.textlength(rw, font=font) for rw in rows)
         if w > avail:
+            # 넓히기: 먼저 오른쪽(다음 글자 직전까지), 모자라면 왼쪽(앞 글자·앞 라벨 직후까지) — 가운데 정렬된 칸(분류 표)에 빈 곳이 많다
             extra = min(w - avail, limit - box[2])
             if extra > 0:
                 box[2] += extra
+            for d in drawn:
+                if not (d[3] < box[1] or d[1] > box[3]) and d[2] <= box[0] + 2:
+                    llimit = max(llimit, d[2] + 2 * dp)
+            need = w - ((box[2] - box[0]) - 11 * dp)
+            if need > 0:
+                box[0] -= max(0, min(need, box[0] - llimit, 3 * row_h))   # 왼쪽은 줄 높이 3배까지만 (OCR은 사진을 모른다: 썸네일 위로 뻗지 않게)
             avail = (box[2] - box[0]) - 11 * dp
-        while w > avail and size > 8 * dp:
+        if w > avail:
+            # 그래도 안 되면 자르기 전에 간격부터 줄인다 ("쓰촨 · 간식" → "쓰촨·간식")
+            rows = [rw.replace(' · ', '·') for rw in rows]
+            w = max(draw.textlength(rw, font=font) for rw in rows)
+        while w > avail and size > minsz:
             size -= 1 * dp; font = ImageFont.truetype(FONT, int(size)); w = max(draw.textlength(rw, font=font) for rw in rows)
         rows = [rw if draw.textlength(rw, font=font) <= avail else _trim(draw, rw, font, avail) for rw in rows]
         draw.rounded_rectangle(box, radius=5 * dp, fill=(43, 37, 34, 255))
@@ -78,7 +92,7 @@ def render(img_path, ocr_path, out_path, dp=None):
         asc, desc = font.getmetrics()
         for i, rw in enumerate(rows):
             cy = box[1] + 2 * dp + row_h * (i + 0.5)
-            draw.text((box[0] + 7 * dp, cy - (asc - desc) / 2), rw, font=font, fill=(255, 255, 255))
+            draw.text((box[0] + 7 * dp, cy), rw, font=font, fill=(255, 255, 255), anchor='lm')
         drawn.append(box)
     img.save(out_path)
     return report
