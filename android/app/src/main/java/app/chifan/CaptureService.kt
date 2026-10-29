@@ -263,46 +263,30 @@ class CaptureService : Service() {
     /** 마지막 OCR 결과 (읽은 줄 → 붙인 라벨, 없으면 null). 창의 '읽은 글자' 탭에서 보여 준다. */
     @Volatile var lastOcr: List<Pair<String, String?>> = emptyList()
 
+    private val labeler by lazy { Labeler(dict) }
+
     /**
-     * OCR 결과 → 라벨. 줄 전체가 사전에 있으면 그 뜻, 아니면 단어별로, 그래도 없으면 줄 안에서 찾은 뜻들을 이어 붙인다.
-     * 이어 붙일 때는 한 글자짜리(甜, 冰, 热…)는 버리고, 찾은 말이 한자의 절반도 못 덮으면 라벨을 안 붙인다 — 틀린 라벨보다 빈 게 낫다.
+     * OCR 결과 → 라벨. 줄마다 Labeler(숫자 규칙 → 사전 조각 → 한자음)로 만든다.
+     * 기계 번역은 설정에서 켠 경우에만, 사전 조각이 하나도 없는 줄에 쓴다 (영어를 거쳐 품질이 낮다).
      */
     private fun toLabels(t: Text): List<OverlayView.Label> {
         val out = ArrayList<OverlayView.Label>()
         val seen = ArrayList<Pair<String, String?>>()
         val useMt = Mt.ready && Prefs.mtOn(this)
-        // 캡처는 라벨을 숨긴 화면으로 하므로 우리 라벨이 섞여 읽히지 않는다
         for (block in t.textBlocks) for (line in block.lines) {
             val box = line.boundingBox ?: continue
-            val lt = clean(line.text)
-            if (!hasHan(lt)) continue
-            val whole = dict.exact(lt)
-            if (whole != null) { out.add(OverlayView.Label(box, whole.ko, kindOf(whole))); seen.add(lt to whole.ko); continue }
-            val elLabels = ArrayList<String>()
-            for (el in line.elements) {
-                val et = clean(el.text); val eb = el.boundingBox ?: continue
-                val h = dict.exact(et) ?: continue
-                out.add(OverlayView.Label(eb, h.ko, kindOf(h))); elLabels.add(h.ko)
-            }
-            if (elLabels.isNotEmpty()) { seen.add(lt to elLabels.joinToString(" · ")); continue }
-            // 사전에 통째로 없는 줄: 폰 안 번역이 준비돼 있으면 번역, 아니면 줄 안에서 찾은 말을 이어 붙인다
-            if (useMt) {
+            val raw = line.text.trim()
+            if (!hasHan(raw)) continue
+            val r = labeler.label(raw)
+            if (r != null && (r.dictParts > 0 || !useMt)) {
+                out.add(OverlayView.Label(box, r.text, r.kind)); seen.add(raw to r.text)
+            } else if (useMt) {
+                val lt = clean(raw)
                 val mt = Mt.cached(lt)
-                if (mt == null) Mt.request(lt) { scheduleRebuild() }
-                else if (mt.isNotEmpty()) {
-                    val s = if (mt.length > 28) mt.substring(0, 27) + "…" else mt
-                    out.add(OverlayView.Label(box, s, OverlayView.Label.MT)); seen.add(lt to "$mt ⟨번역⟩")
-                    if (out.size >= MAX_LABELS) break
-                    continue
-                }
-            }
-            val hits = dict.annotate(lt).filter { it.zh.length >= 2 }
-            val han = lt.count { it in '\u3400'..'\u9FFF' }
-            if (hits.isEmpty() || hits.sumOf { it.zh.length } * 2 < han) { seen.add(lt to null); continue }
-            val shown = hits.distinctBy { it.zh }.take(3)
-            val s = shown.joinToString(" · ") { it.ko } + if (hits.size > 3) " …" else ""
-            out.add(OverlayView.Label(box, s, if (shown.any { it.foodId != null }) OverlayView.Label.FOOD else OverlayView.Label.DICT))
-            seen.add(lt to s)
+                if (mt == null) { Mt.request(lt) { scheduleRebuild() }; seen.add(raw to (r?.text)); r?.let { out.add(OverlayView.Label(box, it.text, it.kind)) } }
+                else if (mt.isNotEmpty()) { out.add(OverlayView.Label(box, mt, OverlayView.Label.MT)); seen.add(raw to "$mt ⟨번역⟩") }
+                else { seen.add(raw to r?.text); r?.let { out.add(OverlayView.Label(box, it.text, it.kind)) } }
+            } else seen.add(raw to null)
             if (out.size >= MAX_LABELS) break
         }
         lastOcr = seen
@@ -311,8 +295,6 @@ class CaptureService : Service() {
 
     /** 한자·숫자·영문만 남긴다 (한글 라벨이 줄에 섞여 읽혀도 매칭이 깨지지 않게) */
     private fun clean(s: String) = s.replace(Regex("[^\\u3400-\\u9FFF0-9A-Za-z]"), "")
-
-    private fun kindOf(h: Hit) = if (h.foodId != null) OverlayView.Label.FOOD else OverlayView.Label.DICT
 
     private fun overlapRatio(a: Rect, line: Rect): Float {
         val x = Rect()

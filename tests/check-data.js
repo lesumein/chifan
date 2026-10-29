@@ -32,7 +32,7 @@ for (const g of gloss.items) {
   gzh.add(g.zh);
 }
 const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-for (const f of ['data/categories.json', 'data/foods.json', 'data/requests.json', 'data/glossary.json'])
+for (const f of ['data/categories.json', 'data/foods.json', 'data/requests.json', 'data/glossary.json', 'data/hanja.json'])
   if (!sw.includes(`'${f}'`)) errs.push(`sw.js 캐시 목록에 ${f} 없음`);
 if (foods.length < 100 || foods.length > 200) errs.push(`음식 개수 ${foods.length} (100~200 목표)`);
 for (const c of cats) if (!foods.some(f => f.cat === c.id)) errs.push(`빈 카테고리 ${c.id}`);
@@ -40,7 +40,7 @@ for (const c of cats) if (!foods.some(f => f.cat === c.id)) errs.push(`빈 카�
 // 외부 주소: 배달 H5·스토어 주소(config.js) 말고는 없어야 함 (중국에서 막히는 CDN·폰트 방지)
 const allow = [/^https:\/\/h5\.waimai\.meituan\.com\//, /^https:\/\/play\.google\.com\/store\/apps\/details/, /^https:\/\/apps\.apple\.com\/cn\/app\//, /^http:\/\/www\.w3\.org\/2000\/svg/];
 const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e =>
-  e.name.startsWith('.') || ['tests', 'node_modules', 'screenshots', 'android', 'apk'].includes(e.name) ? [] :
+  e.name.startsWith('.') || ['tests', 'node_modules', 'screenshots', 'android', 'apk'].includes(e.name) || e.name === 'hanja.LICENSE.txt' ? [] :
   e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
 for (const file of walk(root).filter(f => /\.(html|css|js|json|webmanifest|svg)$/.test(f))) {
   const text = fs.readFileSync(file, 'utf8');

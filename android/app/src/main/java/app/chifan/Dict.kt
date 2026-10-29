@@ -36,7 +36,10 @@ class Dict private constructor(ctx: Context) {
     val gloss: List<Gloss>
 
     private val map = HashMap<String, Hit>()
-    private var maxLen = 1
+    var maxLen = 1
+        private set
+    /** 한자 → 한국어 음 (data/hanja.json, 유니코드 Unihan 기반) */
+    private val hanja = HashMap<Char, String>()
 
     init {
         val cats = JSONArray(ctx.assets.open("categories.json").readBytes().decodeToString())
@@ -70,6 +73,9 @@ class Dict private constructor(ctx: Context) {
             Gloss(o.getString("zh"), o.getString("ko"), o.getString("group"))
         }
 
+        val hj = JSONObject(ctx.assets.open("hanja.json").readBytes().decodeToString())
+        for (k in hj.keys()) if (k.length == 1) hanja[k[0]] = hj.getString(k)
+
         gloss.forEach { put(it.zh, Hit(it.zh, it.ko, null)) }
         requests.forEach { put(it.zh, Hit(it.zh, it.ko, null)) }
         foods.forEach { f ->
@@ -91,6 +97,7 @@ class Dict private constructor(ctx: Context) {
         (0 until a.length()).map { i -> val o = a.getJSONObject(i); Group(o.getString("id"), o.getString("ko")) }
 
     fun exact(zh: String): Hit? = map[zh]
+    fun reading(c: Char): String? = hanja[c]
 
     /** 글자 안에서 사전에 있는 구간을 모두 찾는다 (가장 긴 단어 우선, 겹치지 않음). */
     fun annotate(text: String): List<Hit> {

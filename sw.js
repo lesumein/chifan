@@ -1,5 +1,5 @@
 // 오프라인용 서비스워커. 파일을 바꾸면 VERSION을 올릴 것.
-var VERSION = 'chifan-v18';
+var VERSION = 'chifan-v19';
 var CORE = [
   './',
   'index.html',
@@ -14,6 +14,7 @@ var CORE = [
   'data/foods.json',
   'data/requests.json',
   'data/glossary.json',
+  'data/hanja.json',
   'icons/icon.svg',
   'icons/pattern.svg',
   'icons/icon-192.png',

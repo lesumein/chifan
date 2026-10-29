@@ -83,7 +83,7 @@ class MainActivity : Activity() {
         root.addView(mtState, lp(top = 2))
 
         val swMt = Switch(this).apply {
-            text = "사전에 없는 말은 폰 안 번역으로 (파란 라벨)"
+            text = "기계 번역도 켜기 (영어를 거쳐 품질 낮음, 파란 라벨)"
             textSize = 15f; setTextColor(getColor(R.color.ink))
             isChecked = Prefs.mtOn(this@MainActivity)
             setOnCheckedChangeListener { _, on -> Prefs.setMtOn(this@MainActivity, on); CaptureService.instance?.refreshNow() }
@@ -101,8 +101,8 @@ class MainActivity : Activity() {
         root.addView(text("이렇게 써요", 16f, getColor(R.color.ink), bold = true), lp(top = 22))
         root.addView(text(
             "• [덧그리기 시작]을 누르면 폰이 화면 캡처를 허용할지 물어요. ‘전체 화면’으로 허용하세요. 읽는 동안 상태바에 표시돼요.\n" +
-            "• 메이퇀(또는 어떤 앱이든) 화면의 중국어 글자 옆에 한국어 뜻이 붙어요. 빨강·갈색은 직접 만든 사전, 파랑은 폰 안 기계 번역이에요.\n" +
-            "• 번역 모델은 한 번만 받으면 돼요. 중국에선 받을 수 없으니 한국에서 미리 받아 두세요. 받은 뒤엔 인터넷 없이 돌아요.\n" +
+            "• 메이퇀(또는 어떤 앱이든) 화면의 중국어 글자 옆에 한국어 뜻이 붙어요. 빨강·갈색은 사전(재료·조리법·형태 조각을 이어 붙임), 회색은 사전에 없어 한자음만 단 것, 파랑은 기계 번역(기본 꺼짐)이에요.\n" +
+            "• 기계 번역을 켜려면 번역 모델을 한 번 받아야 해요(선택). 한국에서만 받을 수 있고, 받은 뒤엔 인터넷 없이 돌아요.\n" +
             "• 오른쪽에 뜨는 치판 버튼을 누르면 메뉴 고르기·요청사항·단어장이 작은 창으로 열려요. 메뉴를 누르면 검색어가 복사돼요.\n" +
             "• 버튼은 위아래로 끌어 옮길 수 있어요. 끝나면 알림의 [중지]나 여기 [중지]를 누르세요.", 14f, getColor(R.color.muted)))
 
@@ -139,9 +139,9 @@ class MainActivity : Activity() {
         if (!dl) baseBytes = -1
         mtState.text = when {
             dl -> progressText()
-            mtReady -> "번역 모델이 있어요. 인터넷 없이도 번역돼요."
+            mtReady -> "번역 모델이 있어요. 위 스위치로 켜면 사전에 없는 줄을 번역해요 (품질 낮음)."
             Mt.lastError != null -> "받지 못했어요: ${Mt.lastError}. 인터넷 연결 확인 후 다시 눌러 주세요."
-            else -> "아직 안 받았어요. 사전에 있는 말만 뜻이 붙어요."
+            else -> "선택 사항이에요. 사전·한자음만으로도 라벨이 붙어요."
         }
     }
 
@@ -193,7 +193,7 @@ class MainActivity : Activity() {
         status.text = (if (overlayOk) "✓ 다른 앱 위에 표시: 허용됨" else "○ 다른 앱 위에 표시: 아직 허용 안 됨") + "\n" +
             (if (running) "✓ 덧그리기 실행 중 — 다른 앱으로 가면 버튼이 떠요" else "○ 덧그리기 꺼짐") + "\n" +
             (if (meituan) "✓ 메이퇀 앱 있음" else "○ 메이퇀 앱이 없어요 — 아래 버튼으로 설치") + "\n" +
-            (if (mtReady) "✓ 번역 모델 있음 — 오프라인 번역 가능" else if (Mt.downloading) "⏳ 번역 모델 받는 중…" else "○ 번역 모델이 없어요 — 사전에 있는 말만 뜻이 붙어요")
+            (if (mtReady) "✓ 번역 모델 있음 (선택 기능)" else if (Mt.downloading) "⏳ 번역 모델 받는 중…" else "○ 번역 모델 없음 (선택 기능, 없어도 됨)")
         overlayBtn.text = if (overlayOk) "다른 앱 위에 표시: 허용됨" else "1. 다른 앱 위에 표시 허용"
         overlayBtn.isEnabled = !overlayOk
         startBtn.text = if (running) "덧그리기 중지" else "2. 덧그리기 시작"

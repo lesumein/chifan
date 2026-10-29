@@ -11,7 +11,7 @@
 
   var S = {
     foods: [], cats: [], catById: {}, foodById: {}, req: { groups: [], items: [] },
-    gloss: { groups: [], items: [] }, glossGroup: 'option', dict: null, dictMax: 1,
+    gloss: { groups: [], items: [] }, glossGroup: 'option', dict: null, dictMax: 1, hanja: {},
     cat: LS.get('cat', 'noodle'), query: '',
     recent: LS.get('recent', []), memo: LS.get('memo', []),
     photos: {}, lastCopied: null, sheetFood: null
@@ -267,8 +267,8 @@
       '<p>' + openState + '</p>' +
       '<h3>안드로이드 앱 (실험)</h3>' +
       '<p>중국 앱 화면 위에 한국어 뜻을 덧그리고, 떠다니는 버튼으로 메뉴·요청사항을 바로 복사하는 안드로이드 앱이 있어요. ' +
-      '사전에 없는 말은 폰 안 번역 모델로 번역해요(파란 라벨). 글자 인식도 번역도 폰 안에서만 돌아요. 설치 파일(약 34MB)을 직접 받아 설치해요(스토어 아님). 자세한 건 README.</p>' +
-      '<div class="row"><a class="btn" href="apk/chifan-0.10-debug.apk" download>앱 설치 파일 받기 (APK)</a></div>' +
+      '사전 조각(재료·조리법·형태)을 이어 붙이고, 사전에 없는 한자는 한자음을 달아요. 글자 인식은 폰 안에서만 돌아요. 설치 파일(약 34MB)을 직접 받아 설치해요(스토어 아님). 자세한 건 README.</p>' +
+      '<div class="row"><a class="btn" href="apk/chifan-0.11-debug.apk" download>앱 설치 파일 받기 (APK)</a></div>' +
       '<h3>배달앱이 없다면</h3>' +
       '<p>먼저 메이퇀 앱을 설치하세요. 아이폰은 중국 지역 Apple ID가 있어야 보일 수 있어요. ' +
       '앱이 없으면 [앱으로 열기]를 눌러도 웹으로 넘어가요.</p>' +
@@ -362,8 +362,14 @@
       }
       if (hit) out.push(hit);
       else {
+        // 사전에 없는 한자는 한자음(회색)으로. 연속된 한자음은 한 덩어리로
+        var rd = S.hanja[chars[i]];
         var last = out[out.length - 1];
-        if (last && !last.v) last.t += chars[i]; else out.push({ t: chars[i], v: null });
+        if (rd) {
+          if (last && last.h) { last.t += chars[i]; last.v.ko += rd; }
+          else out.push({ t: chars[i], v: { ko: rd }, h: true });
+        } else if (last && !last.v) last.t += chars[i];
+        else out.push({ t: chars[i], v: null });
         i++;
       }
     }
@@ -379,7 +385,7 @@
     out.innerHTML = toks.map(function (t) {
       if (!t.v) return '<span class="plain" lang="zh-CN">' + esc(t.t) + '</span>';
       known++;
-      return '<span class="tk' + (t.v.food ? ' is-food' : '') + '"' + (t.v.food ? ' data-food="' + esc(t.v.food) + '" role="button" tabindex="0"' : '') + '>' +
+      return '<span class="tk' + (t.v.food ? ' is-food' : '') + (t.h ? ' is-hanja' : '') + '"' + (t.v.food ? ' data-food="' + esc(t.v.food) + '" role="button" tabindex="0"' : '') + '>' +
         '<span class="tk-zh" lang="zh-CN">' + esc(t.t) + '</span><span class="tk-ko">' + esc(t.v.ko) + '</span></span>';
     }).join('');
     if (!known) out.innerHTML += '<p class="hint">아는 단어를 못 찾았어요. 화면 번역을 써 보세요.</p>';
@@ -559,9 +565,9 @@
     bind();
     inAppBanner();
     $('#setupCard').hidden = !!LS.get('setupDone', false);
-    Promise.all([loadJSON('data/categories.json'), loadJSON('data/foods.json'), loadJSON('data/requests.json'), loadJSON('data/glossary.json')])
+    Promise.all([loadJSON('data/categories.json'), loadJSON('data/foods.json'), loadJSON('data/requests.json'), loadJSON('data/glossary.json'), loadJSON('data/hanja.json')])
       .then(function (r) {
-        S.cats = r[0]; S.foods = r[1]; S.req = r[2]; S.gloss = r[3];
+        S.cats = r[0]; S.foods = r[1]; S.req = r[2]; S.gloss = r[3]; S.hanja = r[4];
         S.cats.forEach(function (c) { S.catById[c.id] = c; });
         S.foods.forEach(function (f) { S.foodById[f.id] = f; });
         if (!S.catById[S.cat] && S.cat !== 'recent') S.cat = S.cats[0].id;
