@@ -50,10 +50,15 @@ class CaptureService : Service() {
     private val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
 
     private var width = 0; private var height = 0; private var dpi = 0
-    private var lastFrameAt = 0L
-    private var lastHash = 0L
+    private var lastCaptureAt = 0L
+    private var lastHash = 0L            // 라벨이 그려진 상태의 화면 해시 (이것과 같으면 아무것도 안 함)
+    private var lastSig = ""             // 마지막 OCR 결과 서명 (같으면 라벨을 다시 그리지 않음)
     @Volatile private var busy = false
     @Volatile private var paused = false
+    // 되먹임 방지: 캡처는 라벨을 숨긴 깨끗한 화면으로만 한다
+    @Volatile private var waitingClean = false
+    @Volatile private var hideAt = 0L
+    @Volatile private var settleNext = false   // 우리가 라벨을 다시 그린 직후의 프레임은 '기준 화면'으로만 삼는다
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -75,7 +80,7 @@ class CaptureService : Service() {
         main.postDelayed({
             rebuildPending = false
             val t = lastText ?: return@postDelayed
-            overlay?.set(toLabels(t), t.textBlocks.flatMap { b -> b.lines.mapNotNull { it.boundingBox } })
+            draw(toLabels(t), t.textBlocks.flatMap { b -> b.lines.mapNotNull { it.boundingBox } })
         }, 150)
     }
 
@@ -147,22 +152,45 @@ class CaptureService : Service() {
         projection?.stop(); projection = null
     }
 
-    /** 새 프레임. 0.6초에 한 번, 화면이 바뀌었을 때만 OCR을 돌린다. */
+    /**
+     * 새 프레임. 흐름:
+     * 1) 라벨이 그려진 화면이 지난번과 같으면 아무것도 안 한다.
+     * 2) 달라졌으면 라벨을 숨기고(한 프레임), 숨긴 뒤 들어온 깨끗한 프레임을 OCR에 넘기고 라벨을 바로 되살린다.
+     * 3) 라벨을 새로 그린 직후 들어오는 프레임은 비교 기준으로만 삼는다 (우리 그림을 '변화'로 보지 않게).
+     */
     private fun onFrame(r: ImageReader) {
         val img = r.acquireLatestImage() ?: return
         try {
             val now = System.currentTimeMillis()
-            if (busy || paused || !Prefs.labelsOn(this) || now - lastFrameAt < 600) return
+            if (paused || !Prefs.labelsOn(this)) return
             val plane = img.planes[0]
             val rowStride = plane.rowStride; val pixelStride = plane.pixelStride
             val padded = Bitmap.createBitmap(rowStride / pixelStride, height, Bitmap.Config.ARGB_8888)
             padded.copyPixelsFromBuffer(plane.buffer)
             val bmp = if (padded.width == width) padded else Bitmap.createBitmap(padded, 0, 0, width, height)
+
+            if (waitingClean) {
+                if (now - hideAt < 25) return                 // 아직 라벨이 보이던 프레임일 수 있음
+                if (now - hideAt > 600) { waitingClean = false; main.post { overlay?.visibility = android.view.View.VISIBLE }; return }
+                waitingClean = false
+                main.post { overlay?.visibility = android.view.View.VISIBLE }
+                lastCaptureAt = now; busy = true
+                recognize(bmp)
+                return
+            }
             val hash = frameHash(bmp)
-            if (hash == lastHash) return
-            lastHash = hash; lastFrameAt = now; busy = true
-            recognize(bmp)
+            if (settleNext) { settleNext = false; lastHash = hash; return }
+            if (hash == lastHash || busy || now - lastCaptureAt < 600) return
+            lastHash = hash
+            waitingClean = true; hideAt = now
+            main.post { overlay?.visibility = android.view.View.INVISIBLE }
         } finally { img.close() }
+    }
+
+    /** 라벨을 다시 그린다. 그 직후 들어올 프레임은 기준 화면으로만 쓴다. */
+    private fun draw(labels: List<OverlayView.Label>, boxes: List<Rect>) {
+        settleNext = true
+        overlay?.set(labels, boxes)
     }
 
     /** 작게 줄인 그림의 픽셀을 합쳐 만든 값. 같으면 화면이 안 바뀐 것으로 본다. */
@@ -178,8 +206,13 @@ class CaptureService : Service() {
         recognizer.process(InputImage.fromBitmap(bmp, 0))
             .addOnSuccessListener { t ->
                 lastText = t
-                val boxes = t.textBlocks.flatMap { b -> b.lines.mapNotNull { it.boundingBox } }
-                overlay?.set(toLabels(t), boxes); busy = false
+                // 읽은 글자와 자리가 지난번과 같으면 라벨을 건드리지 않는다 (깜빡임·흔들림 방지)
+                val sig = t.textBlocks.joinToString("|") { b -> b.lines.joinToString("|") { "${it.text}@${it.boundingBox}" } }
+                if (sig != lastSig) {
+                    lastSig = sig
+                    draw(toLabels(t), t.textBlocks.flatMap { b -> b.lines.mapNotNull { it.boundingBox } })
+                }
+                busy = false
             }
             .addOnFailureListener { busy = false }
     }
@@ -195,11 +228,9 @@ class CaptureService : Service() {
         val out = ArrayList<OverlayView.Label>()
         val seen = ArrayList<Pair<String, String?>>()
         val useMt = Mt.ready && Prefs.mtOn(this)
-        // 우리가 그린 라벨이 다음 캡처에서 다시 읽히는 것 방지: 라벨 자리를 절반 넘게 차지하는 줄은 버린다
-        val own = overlay?.drawnRects() ?: emptyList()
+        // 캡처는 라벨을 숨긴 화면으로 하므로 우리 라벨이 섞여 읽히지 않는다
         for (block in t.textBlocks) for (line in block.lines) {
             val box = line.boundingBox ?: continue
-            if (own.any { overlapRatio(it, box) >= 0.5f }) continue
             val lt = clean(line.text)
             if (!hasHan(lt)) continue
             val whole = dict.exact(lt)
@@ -263,8 +294,8 @@ class CaptureService : Service() {
     }
 
     /** 창이 열려 있는 동안은 캡처를 쉰다 (우리 창을 읽지 않도록) */
-    fun setPaused(p: Boolean) { paused = p; if (p) overlay?.labels = emptyList() else lastHash = 0 }
-    fun refreshNow() { overlay?.labels = emptyList(); lastHash = 0 }
+    fun setPaused(p: Boolean) { paused = p; if (p) overlay?.labels = emptyList() else { lastHash = 0; lastSig = "" } }
+    fun refreshNow() { overlay?.labels = emptyList(); lastHash = 0; lastSig = "" }
 
     companion object {
         const val ACTION_STOP = "app.chifan.STOP"
