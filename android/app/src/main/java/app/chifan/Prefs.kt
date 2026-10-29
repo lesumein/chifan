@@ -9,6 +9,8 @@ object Prefs {
     fun setLabelsOn(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("labels", v).apply()
     fun mtOn(ctx: Context) = p(ctx).getBoolean("mt", false)   // 영어를 거치는 번역이라 품질이 낮아 기본 꺼짐
     fun setMtOn(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("mt", v).apply()
+    fun coverOn(ctx: Context) = p(ctx).getBoolean("cover", true)
+    fun setCoverOn(ctx: Context, v: Boolean) = p(ctx).edit().putBoolean("cover", v).apply()
     fun bubbleY(ctx: Context) = p(ctx).getInt("bubbleY", -1)
     fun setBubbleY(ctx: Context, y: Int) = p(ctx).edit().putInt("bubbleY", y).apply()
     fun memo(ctx: Context): MutableSet<String> = HashSet(p(ctx).getStringSet("memo", emptySet()) ?: emptySet())

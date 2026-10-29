@@ -90,6 +90,14 @@ class MainActivity : Activity() {
         }
         root.addView(swMt, lp(top = 18))
 
+        val swCover = Switch(this).apply {
+            text = "원래 글자 위에 덮어쓰기 (끄면 옆에 작은 라벨)"
+            textSize = 15f; setTextColor(getColor(R.color.ink))
+            isChecked = Prefs.coverOn(this@MainActivity)
+            setOnCheckedChangeListener { _, on -> Prefs.setCoverOn(this@MainActivity, on); CaptureService.instance?.refreshNow() }
+        }
+        root.addView(swCover, lp(top = 8))
+
         val sw = Switch(this).apply {
             text = "화면 글자에 한국어 라벨 붙이기"
             textSize = 15f; setTextColor(getColor(R.color.ink))

@@ -38,11 +38,50 @@ class OverlayView(ctx: Context) : View(ctx) {
     /** 마지막으로 실제 그린 라벨 자리(화면 좌표) */
     fun drawnRects(): List<Rect> = synchronized(drawn) { ArrayList(drawn) }
 
+    /** true면 원래 글자 위에 덮어 그린다 (기본). false면 옆에 작은 라벨로 붙인다. */
+    @Volatile var coverMode = true
+
+    private val coverBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xF7FFFDF9.toInt() }
+    private val coverText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2A211C.toInt(); isFakeBoldText = true }
+    private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    /** 원래 글자 자리를 한국어로 덮는다. 글자 높이에 맞춰 크기를 정하고, 안 들어가면 줄이고, 그래도 안 되면 …로 자른다. */
+    private fun drawCover(c: Canvas, ls: List<Label>) {
+        val minSize = 10f * d; val maxSize = 17f * d
+        for (l in ls) {
+            val b = RectF((l.bounds.left - loc[0]).toFloat(), (l.bounds.top - loc[1]).toFloat(), (l.bounds.right - loc[0]).toFloat(), (l.bounds.bottom - loc[1]).toFloat())
+            if (b.height() < 6 * d || b.width() < 10 * d) continue
+            val r = RectF(b.left - 3 * d, b.top - 2 * d, b.right + 3 * d, b.bottom + 2 * d)
+            if (r.right > width) r.right = width.toFloat()
+            val avail = r.width() - 8 * d - 3 * d
+            var size = (b.height() * 0.72f).coerceIn(minSize, maxSize)
+            coverText.textSize = size
+            var text = l.text
+            var w = coverText.measureText(text)
+            // 폭에 맞춰 줄이기 → 그래도 넘치면 오른쪽으로 더 쓰기(화면 안에서) → 그래도 넘치면 자르기
+            while (w > avail && size > minSize) { size -= 1 * d; coverText.textSize = size; w = coverText.measureText(text) }
+            if (w > avail) {
+                val extra = minOf(w - avail, width - r.right)
+                if (extra > 0) r.right += extra
+            }
+            val avail2 = r.width() - 8 * d - 3 * d
+            while (coverText.measureText(text) > avail2 && text.length > 2) text = text.substring(0, text.length - 2) + "…"
+            c.drawRoundRect(r, radius, radius, coverBg)
+            barPaint.color = when (l.kind) { Label.FOOD -> 0xFFA2502E.toInt(); Label.MT -> 0xFF3F5F7F.toInt(); Label.HANJA -> 0xFF9A9A9A.toInt(); else -> 0xFFC2462E.toInt() }
+            c.drawRoundRect(RectF(r.left, r.top, r.left + 3 * d, r.bottom), 2 * d, 2 * d, barPaint)
+            val fm = coverText.fontMetrics
+            val y = r.centerY() - (fm.ascent + fm.descent) / 2
+            c.drawText(text, r.left + 3 * d + 4 * d, y, coverText)
+            synchronized(drawn) { drawn.add(Rect((r.left + loc[0]).toInt(), (r.top + loc[1]).toInt(), (r.right + loc[0]).toInt(), (r.bottom + loc[1]).toInt())) }
+        }
+    }
+
     override fun onDraw(c: Canvas) {
         val ls = labels
         synchronized(drawn) { drawn.clear() }
         if (ls.isEmpty()) return
         getLocationOnScreen(loc)
+        if (coverMode) { drawCover(c, ls); return }
         val fm = textPaint.fontMetrics
         val h = fm.descent - fm.ascent + pad * 2
         val taken = ArrayList<RectF>()

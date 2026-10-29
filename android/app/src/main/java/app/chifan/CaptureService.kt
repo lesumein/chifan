@@ -306,6 +306,7 @@ class CaptureService : Service() {
 
     private fun showOverlay() {
         val v = OverlayView(this)
+        v.coverMode = Prefs.coverOn(this)
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -320,7 +321,7 @@ class CaptureService : Service() {
 
     /** 창이 열려 있는 동안은 캡처를 쉰다 (우리 창을 읽지 않도록) */
     fun setPaused(p: Boolean) { paused = p; if (p) overlay?.labels = emptyList() else { lastGrid = null; lastSig = ""; tracked.clear() } }
-    fun refreshNow() { overlay?.labels = emptyList(); lastGrid = null; lastSig = ""; tracked.clear() }
+    fun refreshNow() { overlay?.coverMode = Prefs.coverOn(this); overlay?.labels = emptyList(); lastGrid = null; lastSig = ""; tracked.clear() }
 
     companion object {
         const val ACTION_STOP = "app.chifan.STOP"
