@@ -11,8 +11,8 @@ android {
         applicationId = "app.chifan"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "0.24"
+        versionCode = 25
+        versionName = "0.25"
         // OCR 네이티브 라이브러리가 CPU 종류마다 10MB씩이라 arm64(2017년 이후 폰)만 넣는다
         ndk { abiFilters += listOf("arm64-v8a") }
     }
@@ -40,4 +40,6 @@ dependencies {
     implementation("com.google.mlkit:translate:17.0.3")
     // 스크롤 상태 기계(FrameGate) 단위 테스트
     testImplementation("junit:junit:4.13.2")
+    // 라벨러 대조 테스트(LabelerParityTest)에서 data 폴더 json 을 읽는 진짜 org.json (안드로이드 것은 테스트에서 빈 껍데기)
+    testImplementation("org.json:json:20240303")
 }

@@ -41,6 +41,8 @@ class Dict private constructor(ctx: Context) {
         private set
     /** 한자 → 한국어 음 (data/hanja.json, 유니코드 Unihan 기반) */
     private val hanja = HashMap<Char, String>()
+    /** 라벨러용 사전 (Lexicon: 안드로이드 없이 테스트 가능) */
+    val lexicon: Lexicon
 
     init {
         val cats = JSONArray(ctx.assets.open("categories.json").readBytes().decodeToString())
@@ -76,6 +78,9 @@ class Dict private constructor(ctx: Context) {
 
         val hj = JSONObject(ctx.assets.open("hanja.json").readBytes().decodeToString())
         for (k in hj.keys()) if (k.length == 1) hanja[k[0]] = hj.getString(k)
+
+        fun asset(n: String) = ctx.assets.open(n).readBytes().decodeToString()
+        lexicon = Lexicon(asset("requests.json"), asset("glossary.json"), asset("foods.json"), asset("hanja.json"), asset("zi.json"), asset("t2s.json"), asset("sound.json"))
 
         // 요청사항 → 단어장(짧은 표기가 있어 우선) → 메뉴 순으로 덮어쓴다 (tests/sim/labeler.py 와 같은 순서)
         requests.forEach { put(it.zh, Hit(it.zh, it.ko, null)) }

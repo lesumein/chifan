@@ -22,3 +22,8 @@ python3 tests/sim/batch.py /tmp/fx /tmp/fxout   # OCR → 라벨 → 덮어 그�
 ```
 
 - `paragraph.py`: 두 줄로 접힌 이름을 한 문단으로 합치는 규칙 (`Paragraphs.kt`와 같아야 한다). `render.py`가 쓴다.
+
+- `coverage.py`: 번역율(라벨이 붙은 줄 비율)과 직역 비율을 잰다. 말뭉치 txt나 `*.ocr.json`을 넣는다.
+- `parity.py`: 말뭉치 → `원문\t라벨` 표. Kotlin `LabelerParityTest`가 이 표와 한 줄씩 대조한다:
+  `python3 tests/sim/parity.py 말뭉치.txt > /tmp/p.tsv && cd android && CHIFAN_PARITY=/tmp/p.tsv ./gradlew testDebugUnitTest`
+- 말뭉치(웹에서 모은 메뉴 이름·화면 글자)는 다른 서비스의 글이라 레포에 넣지 않는다.

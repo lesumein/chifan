@@ -3,3 +3,6 @@ Copyright © 1991-2026 Unicode, Inc. All rights reserved.
 Unicode License v3 — https://www.unicode.org/license.txt
 원본: https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip
 만드는 법: 각 한자의 kHangul 중 교육용(E) → KS X 1001(0) → 첫 번째 음을 고르고, kHangul이 없는 간체자는 kTraditionalVariant로 번체자의 음을 가져옵니다.
+
+
+data/t2s.json (kSimplifiedVariant) and data/sound.json (derived from kMandarin, converted to Hangul) are also derived from the Unicode Han Database (Unihan) under the same license.

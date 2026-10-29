@@ -264,7 +264,7 @@ class CaptureService : Service() {
     /** 마지막 OCR 결과 (읽은 줄 → 붙인 라벨, 없으면 null). 창의 '읽은 글자' 탭에서 보여 준다. */
     @Volatile var lastOcr: List<Pair<String, String?>> = emptyList()
 
-    private val labeler by lazy { Labeler(dict) }
+    private val labeler by lazy { Labeler(dict.lexicon) }
 
     /**
      * OCR 결과 → 라벨. 줄마다 Labeler(숫자 규칙 → 사전 조각 → 한자음)로 만든다.
@@ -290,14 +290,13 @@ class CaptureService : Service() {
             for ((raw, b, rows) in units) {
                 val box = Rect(b.l, b.t, b.r, b.b)
                 val rr = if (units.size == 1) r else labeler.label(raw)
-                if (rr?.text != null) {
+                // 기계 번역은 사전이 못 읽었거나 글자 뜻(직역)으로 풀린 '문장'(리뷰·안내문)에만. 번역이 없으면 직역을 쓴다
+                val tryMt = useMt && sentenceLike(raw) && (rr?.text == null || rr.literal)
+                val mt = if (tryMt) clean(raw).let { lt -> Mt.cached(lt).also { if (it == null) Mt.request(lt) { scheduleRebuild() } } } else null
+                if (mt != null && mt.isNotEmpty() && !hasHan(mt)) {   // 한자가 남은 번역("荤米线")은 버린다
+                    out.add(OverlayView.Label(box, mt, OverlayView.Label.MT, rows)); seen.add(raw to "$mt ⟨번역⟩")
+                } else if (rr?.text != null) {
                     out.add(OverlayView.Label(box, rr.text, rr.kind, rows)); seen.add(raw to rr.text)
-                } else if (useMt && (rr == null || !rr.known) && sentenceLike(raw)) {   // 사전이 못 읽은 '문장'(리뷰·안내문)만 기계 번역
-                    val lt = clean(raw)
-                    val mt = Mt.cached(lt)
-                    if (mt == null) { Mt.request(lt) { scheduleRebuild() }; seen.add(raw to rr?.full) }
-                    else if (mt.isNotEmpty() && !hasHan(mt)) { out.add(OverlayView.Label(box, mt, OverlayView.Label.MT, rows)); seen.add(raw to "$mt ⟨번역⟩") }   // 한자가 남은 번역("荤米线")은 버린다
-                    else seen.add(raw to rr?.full)
                 } else seen.add(raw to rr?.full)
             }
             if (out.size >= MAX_LABELS) break
