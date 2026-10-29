@@ -24,6 +24,12 @@ object Mt {
     private val inFlight = HashSet<String>()
     @Volatile var ready = false
         private set
+    @Volatile var downloading = false
+        private set
+    @Volatile var startedAt = 0L
+        private set
+    @Volatile var lastError: String? = null
+        private set
 
     /** 모델이 받아져 있는지 확인하고 ready를 갱신한다 */
     fun check(cb: (Boolean) -> Unit) {
@@ -36,10 +42,12 @@ object Mt {
 
     /** 모델 내려받기 (약 60MB). wifiOnly면 와이파이에서만. */
     fun download(wifiOnly: Boolean, onDone: (Boolean, String?) -> Unit) {
+        if (downloading) return
+        downloading = true; startedAt = System.currentTimeMillis(); lastError = null
         val c = DownloadConditions.Builder().apply { if (wifiOnly) requireWifi() }.build()
         translator.downloadModelIfNeeded(c)
-            .addOnSuccessListener { ready = true; onDone(true, null) }
-            .addOnFailureListener { ready = false; onDone(false, it.message) }
+            .addOnSuccessListener { ready = true; downloading = false; onDone(true, null) }
+            .addOnFailureListener { ready = false; downloading = false; lastError = it.message; onDone(false, it.message) }
     }
 
     fun cached(text: String): String? = cache.get(text)

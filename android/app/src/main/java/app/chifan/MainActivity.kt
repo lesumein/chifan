@@ -17,6 +17,7 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -31,7 +32,12 @@ class MainActivity : Activity() {
     private lateinit var startBtn: Button
     private lateinit var meituanBtn: Button
     private lateinit var mtBtn: Button
+    private lateinit var mtBar: ProgressBar
+    private lateinit var mtState: TextView
     private var mtReady = false
+    private val tick = object : Runnable {
+        override fun run() { refreshMt(); if (Mt.downloading) status.postDelayed(this, 1000) }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,16 +66,19 @@ class MainActivity : Activity() {
         root.addView(meituanBtn, lp(top = 8))
 
         mtBtn = button("번역 모델 받기 (약 60MB, 한국에서 미리)") {
-            Toast.makeText(this, "받는 중… 와이파이에서 1~2분 걸려요", Toast.LENGTH_LONG).show()
-            mtBtn.isEnabled = false
             Mt.download(wifiOnly = false) { ok, err ->
                 runOnUiThread {
                     Toast.makeText(this, if (ok) "번역 모델을 받았어요. 이제 오프라인에서도 번역돼요" else "받지 못했어요: ${err ?: "네트워크 확인"}", Toast.LENGTH_LONG).show()
-                    refresh()
+                    mtReady = ok; refresh()
                 }
             }
+            status.removeCallbacks(tick); status.post(tick)
         }
         root.addView(mtBtn, lp(top = 8))
+        mtBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { isIndeterminate = true; visibility = android.view.View.GONE }
+        root.addView(mtBar, lp(top = 4))
+        mtState = text("", 13f, getColor(R.color.muted))
+        root.addView(mtState, lp(top = 2))
 
         val swMt = Switch(this).apply {
             text = "사전에 없는 말은 폰 안 번역으로 (파란 라벨)"
@@ -110,7 +119,26 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
     }
 
-    override fun onResume() { super.onResume(); refresh(); Mt.check { ok -> runOnUiThread { mtReady = ok; refresh() } } }
+    override fun onResume() {
+        super.onResume(); refresh()
+        Mt.check { ok -> runOnUiThread { mtReady = ok; refresh() } }
+        status.removeCallbacks(tick); status.post(tick)
+    }
+    override fun onPause() { super.onPause(); status.removeCallbacks(tick) }
+
+    /** 번역 모델 받기 상태: 받는 중(경과 시간) / 받음 / 실패 */
+    private fun refreshMt() {
+        val dl = Mt.downloading
+        mtBar.visibility = if (dl) android.view.View.VISIBLE else android.view.View.GONE
+        mtBtn.isEnabled = !dl && !mtReady
+        mtBtn.text = when { mtReady -> "번역 모델: 받음 ✓"; dl -> "받는 중…"; else -> "번역 모델 받기 (약 60MB, 한국에서 미리)" }
+        mtState.text = when {
+            dl -> "받는 중… ${(System.currentTimeMillis() - Mt.startedAt) / 1000}초 경과. 와이파이에서 보통 1~3분, 끝나면 여기 표시가 바뀌어요. 이 화면을 나가도 계속 받아요."
+            mtReady -> "번역 모델이 있어요. 인터넷 없이도 번역돼요."
+            Mt.lastError != null -> "받지 못했어요: ${Mt.lastError}. 와이파이 확인 후 다시 눌러 주세요."
+            else -> "아직 안 받았어요. 사전에 있는 말만 뜻이 붙어요."
+        }
+    }
 
     private fun refresh() {
         val overlayOk = Settings.canDrawOverlays(this)
@@ -119,13 +147,12 @@ class MainActivity : Activity() {
         status.text = (if (overlayOk) "✓ 다른 앱 위에 표시: 허용됨" else "○ 다른 앱 위에 표시: 아직 허용 안 됨") + "\n" +
             (if (running) "✓ 덧그리기 실행 중 — 다른 앱으로 가면 버튼이 떠요" else "○ 덧그리기 꺼짐") + "\n" +
             (if (meituan) "✓ 메이퇀 앱 있음" else "○ 메이퇀 앱이 없어요 — 아래 버튼으로 설치") + "\n" +
-            (if (mtReady) "✓ 번역 모델 있음 — 오프라인 번역 가능" else "○ 번역 모델이 없어요 — 사전에 있는 말만 뜻이 붙어요")
+            (if (mtReady) "✓ 번역 모델 있음 — 오프라인 번역 가능" else if (Mt.downloading) "⏳ 번역 모델 받는 중…" else "○ 번역 모델이 없어요 — 사전에 있는 말만 뜻이 붙어요")
         overlayBtn.text = if (overlayOk) "다른 앱 위에 표시: 허용됨" else "1. 다른 앱 위에 표시 허용"
         overlayBtn.isEnabled = !overlayOk
         startBtn.text = if (running) "덧그리기 중지" else "2. 덧그리기 시작"
         meituanBtn.text = if (meituan) "3. 메이퇀 열기" else "3. 메이퇀 앱 설치하기"
-        mtBtn.text = if (mtReady) "번역 모델: 받음" else "번역 모델 받기 (약 60MB, 한국에서 미리)"
-        mtBtn.isEnabled = !mtReady
+        refreshMt()
     }
 
     private fun toggleService() {
