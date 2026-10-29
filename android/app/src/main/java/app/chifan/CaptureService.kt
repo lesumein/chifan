@@ -191,7 +191,13 @@ class CaptureService : Service() {
         val used = BooleanArray(fresh.size)
         val out = ArrayList<OverlayView.Label>()
         for (old in tracked) {
-            for (i in fresh.indices) if (!used[i] && fresh[i].text == old.text && near(fresh[i].bounds, old.bounds)) { used[i] = true; out.add(old); break }
+            for (i in fresh.indices) {
+                if (used[i] || !near(fresh[i].bounds, old.bounds)) continue
+                // 같은 자리: 글자가 같으면 옛 것(자리째) 유지. 다르면 OCR이 매번 조금씩 다르게 읽은 것 — 더 긴(정보 많은) 쪽을 둔다
+                used[i] = true
+                out.add(if (fresh[i].text.length > old.text.length) OverlayView.Label(old.bounds, fresh[i].text, fresh[i].kind) else old)
+                break
+            }
         }
         for (i in fresh.indices) if (!used[i]) out.add(fresh[i])
         tracked = out
@@ -251,9 +257,7 @@ class CaptureService : Service() {
         val seen = ArrayList<Pair<String, String?>>()
         val lines = ArrayList<Pair<String, Rect>>()
         val useMt = Mt.ready && Prefs.mtOn(this)
-        for (block in t.textBlocks) for (line in block.lines) {
-            val box = line.boundingBox ?: continue
-            val raw = line.text.trim()
+        for (block in t.textBlocks) for (line in block.lines) for ((raw, box) in splitByGap(line)) {
             if (!hasHan(raw)) continue
             lines.add(raw to Rect(box))
             val r = labeler.label(raw)
@@ -270,6 +274,28 @@ class CaptureService : Service() {
         }
         lastOcr = seen
         lastOcrLines = lines
+        return out
+    }
+
+    /**
+     * OCR이 같은 높이의 글자를 한 줄로 합쳐 읽는 경우(왼쪽 분류 "老汤酱肉" + 오른쪽 제목 "老汤酱肉")를 가른다:
+     * 단어 사이 가로 간격이 줄 높이의 1.2배를 넘으면 다른 줄로 본다.
+     */
+    private fun splitByGap(line: com.google.mlkit.vision.text.Text.Line): List<Pair<String, Rect>> {
+        val lb = line.boundingBox ?: return emptyList()
+        val els = line.elements.filter { it.boundingBox != null }
+        if (els.size < 2) return listOf(line.text.trim() to lb)
+        val gapMax = lb.height() * 1.2f
+        val out = ArrayList<Pair<String, Rect>>()
+        var text = StringBuilder(els[0].text); var box = Rect(els[0].boundingBox!!)
+        for (i in 1 until els.size) {
+            val e = els[i]; val eb = e.boundingBox!!
+            if (eb.left - box.right > gapMax) {
+                out.add(text.toString().trim() to box)
+                text = StringBuilder(e.text); box = Rect(eb)
+            } else { text.append(' ').append(e.text); box.union(eb) }
+        }
+        out.add(text.toString().trim() to box)
         return out
     }
 

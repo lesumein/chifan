@@ -69,6 +69,8 @@ RULES = [
     (re.compile(r'预计\s*(\d+:\d+)\s*送达'), lambda m: f"{m.group(1)} 도착 예정"),
     (re.compile(r'距您\s*(\d+(?:\.\d+)?)\s*km'), lambda m: f"{m.group(1)}km 거리"),
     (re.compile(r'(\d+(?:\.\d+)?)\s*km'), lambda m: f"{m.group(1)}km"),
+    (re.compile(r'第(\d+)名'), lambda m: f"{m.group(1)}위"),
+    (re.compile(r'(\d+)人份'), lambda m: f"{m.group(1)}인분"),
     (re.compile(r'(\d+)号楼'), lambda m: f"{m.group(1)}동"),
     (re.compile(r'(\d+)个'), lambda m: f"{m.group(1)}개"),
     (re.compile(r'(\d+)\s*次'), lambda m: f"{m.group(1)}회"),

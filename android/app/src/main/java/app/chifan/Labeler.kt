@@ -48,6 +48,8 @@ class Labeler(private val dict: Dict) {
         r("预计\\s*(\\d+:\\d+)\\s*送达") { m -> "${m.groupValues[1]} 도착 예정" },
         r("距您\\s*(\\d+(?:\\.\\d+)?)\\s*km") { m -> "${m.groupValues[1]}km 거리" },
         r("(\\d+(?:\\.\\d+)?)\\s*km") { m -> "${m.groupValues[1]}km" },
+        r("第(\\d+)名") { m -> "${m.groupValues[1]}위" },
+        r("(\\d+)人份") { m -> "${m.groupValues[1]}인분" },
         r("(\\d+)号楼") { m -> "${m.groupValues[1]}동" },
         r("(\\d+)个") { m -> "${m.groupValues[1]}개" },
         r("(\\d+)\\s*次") { m -> "${m.groupValues[1]}회" },

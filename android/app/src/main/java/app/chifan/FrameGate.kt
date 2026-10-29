@@ -4,8 +4,8 @@ package app.chifan
  * "멈춘 화면만 읽는다"의 상태 기계. 안드로이드에 의존하지 않아 단위 테스트로 스크롤 시나리오를 돌릴 수 있다 (FrameGateTest).
  *
  * 캡처→인식→그리기에 0.3~0.6초가 걸리므로, 움직이는 동안 읽으면 라벨이 "예전 자리"에 찍힌다. 그래서:
- *  - 기준 화면과 30% 넘게 달라지면(스크롤·화면 전환) → 라벨을 즉시 지우고, 멈춘 뒤 프레임을 하나 요청(nudge)해 읽는다.
- *  - 0.6%~30% 달라지면(썸네일 로딩·작은 애니메이션) → 라벨은 그대로 두고, 멈춘 뒤 라벨을 한 프레임만 숨겨 깨끗한 화면을 읽은 뒤
+ *  - 기준 화면과 12% 넘게 달라지면(스크롤·화면 전환 — 오른쪽 목록만 스크롤돼도 이 정도는 바뀐다) → 라벨을 즉시 지우고, 멈춘 뒤 프레임을 하나 요청(nudge)해 읽는다.
+ *  - 0.6%~12% 달라지면(썸네일 로딩·작은 애니메이션) → 라벨은 그대로 두고, 멈춘 뒤 라벨을 한 프레임만 숨겨 깨끗한 화면을 읽은 뒤
  *    바로 되살린다. 결과가 같으면 라벨을 건드리지 않는다 (처음 뜰 때 깜빡이던 원인).
  *  - 프레임이 더 안 들어온 지 settleMs(200ms)가 지나면 멈춘 것으로 본다.
  *  - 읽는 사이 다시 움직이면 늦게 온 결과는 버린다 (seq).
@@ -22,7 +22,7 @@ class FrameGate(
     private val settleMs: Long = 200,
     private val renudgeMs: Long = 150,
     private val changeThreshold: Float = 0.006f,
-    private val bigThreshold: Float = 0.30f
+    private val bigThreshold: Float = 0.12f
 ) {
     interface Actions {
         fun clearLabels()
