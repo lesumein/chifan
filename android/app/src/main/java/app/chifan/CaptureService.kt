@@ -264,7 +264,7 @@ class CaptureService : Service() {
             found.add(raw to Paragraphs.Box(box.left, box.top, box.right, box.bottom))
         }
         // 두 줄로 접힌 이름은 합쳐서 읽는다 (Paragraphs)
-        for (p in Paragraphs.group(found)) {
+        for (p in Paragraphs.group(found, isWord = { dict.exact(it) != null })) {
             val raw = p.text
             val box = Rect(p.box.l, p.box.t, p.box.r, p.box.b)
             val r = labeler.label(raw)

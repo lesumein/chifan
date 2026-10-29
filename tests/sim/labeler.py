@@ -54,6 +54,10 @@ RULES = [
     (re.compile(r'已售\s*(\d+)\+?'), lambda m: f"{m.group(1)}+ 판매"),
     (re.compile(r'(\d+)条评价'), lambda m: f"리뷰 {m.group(1)}개"),
     (re.compile(r'(\d+)%\s*好评率?'), lambda m: f"호평 {m.group(1)}%"),
+    (re.compile(r'好评\s*(\d+)%'), lambda m: f"호평 {m.group(1)}%"),
+    (re.compile(r'(\d+)瓶'), lambda m: f"{m.group(1)}병"),
+    (re.compile(r'(\d+)份'), lambda m: f"{m.group(1)}인분"),
+    (re.compile(r'\d{4}[/.-]\d{1,2}[/.-]\d{1,2}'), 'keep'),       # 날짜
     (re.compile(r'好评率\s*(\d+)%'), lambda m: f"호평 {m.group(1)}%"),
     (re.compile(r'(\d+)选(\d+)'), lambda m: f"{m.group(1)}택{m.group(2)}"),
     (re.compile(r'(\d+)\s*[-~]\s*(\d+)\s*人餐'), lambda m: f"{m.group(1)}~{m.group(2)}인 세트"),
@@ -75,6 +79,17 @@ RULES = [
     (re.compile(r'(\d+)个'), lambda m: f"{m.group(1)}개"),
     (re.compile(r'(\d+)\s*次'), lambda m: f"{m.group(1)}회"),
     (re.compile(r'[xX×]\s*(\d+)'), lambda m: f"x{m.group(1)}"),
+    (re.compile(r'再减(\d+(?:\.\d+)?)元'), lambda m: f"¥{m.group(1)} 추가 할인"),
+    (re.compile(r'省(?:了)?(\d+(?:\.\d+)?)元'), lambda m: f"¥{m.group(1)} 절약"),
+    (re.compile(r'(\d+(?:\.\d+)?)元'), lambda m: f"¥{m.group(1)}"),
+    (re.compile(r'(\d+)天低价'), lambda m: f"{m.group(1)}일 최저가"),
+    (re.compile(r'购买之后(\d+)天有效'), lambda m: f"구매 후 {m.group(1)}일 유효"),
+    (re.compile(r'(\d+)天'), lambda m: f"{m.group(1)}일"),
+    (re.compile(r'(\d+)人推荐'), lambda m: f"{m.group(1)}명 추천"),
+    (re.compile(r'(\d+)家门店通用'), lambda m: f"{m.group(1)}개 매장 공통"),
+    (re.compile(r'半年销量\s*(\d+)(\+?)'), lambda m: f"반년 {m.group(1)}{m.group(2)} 판매"),
+    (re.compile(r'[(（]?[一-鿿]{2,8}店[)）]?$'), lambda m: ''),      # 지점 이름(鲜鱼口店): 뜻 없이 지나가되 '읽은 것'으로 친다
+    (re.compile(r'\d+:\d+\s*[-~－]\s*\d+:\d+'), 'keep'),       # 07:00-21:00
     (re.compile(r'[+＋-]\s*[¥￥]\s*\d+(?:\.\d+)?'), 'keep'),     # +¥4 같은 추가 요금
     (re.compile(r'[¥￥]\s*\d+(?:\.\d+)?'), 'keep'),             # 가격은 그대로
     (re.compile(r'\d+:\d+'), 'keep'),
@@ -100,15 +115,23 @@ def longest(dic, s, i):
     return None
 
 
+PRICE_START = re.compile(r'^[+＋-]?\s*[¥￥]\s*\d')
+
+
 def label(dic, raw):
     """한 줄 → (라벨 글, kind) 또는 None.
-    2자 이상 사전 조각이나 뜻 있는 숫자 규칙이 하나는 있어야 라벨을 붙인다. 가격·숫자는 그대로 둔다.
+    2자 이상 사전 조각이나 뜻 있는 숫자 규칙이 하나는 있어야 하고, 사전·규칙이 읽은 한자가 줄의 한자 60%(12자 넘는 문장은 75%)
+    이상이어야 덮는다 — 모르는 문장(리뷰·안내문)에 조각 몇 개만 붙여 덮으면 원문도 뜻도 못 읽는다. 가격으로 시작하는 줄(¥1.79 6折 ¥3)은 덮지 않는다.
     한자음은 덮어쓰기 라벨에서는 쓰지 않는다 (잘못 읽힌 글자·사진 속 글씨가 전부 소음이 됨)."""
     s = raw.strip()
     if not any(is_han(c) for c in s):
         return None
+    if PRICE_START.match(s):
+        return None
     parts, kinds = [], []
     strong = 0
+    covered = 0
+    total = sum(1 for c in s if is_han(c))
     i = 0
     while i < len(s):
         matched = False
@@ -120,6 +143,7 @@ def label(dic, raw):
                 parts.append(m.group(0).replace('￥', '¥').replace(' ', '')); kinds.append(DICT)
             else:
                 t = f(m)
+                covered += sum(1 for c in m.group(0) if is_han(c))
                 if t:
                     parts.append(t); kinds.append(DICT); strong += 1
             i = m.end(); matched = True
@@ -133,6 +157,7 @@ def label(dic, raw):
         if hit:
             w, (short, ko, food) = hit
             ko = strip_note(short).replace('🌶', '').strip()
+            covered += len(w)
             if ko:
                 parts.append(ko); kinds.append(FOOD if food else DICT)
                 if len(w) >= 2 or food or len(s) == 1:   # 한 글자 칩(热·大·小)은 줄 전체가 그 글자일 때만 인정
@@ -140,6 +165,9 @@ def label(dic, raw):
             i += len(w); continue
         i += 1   # 사전에 없는 한자: 건너뜀
     if not parts or strong == 0:
+        return None
+    need = 0.75 if total > 12 else 0.6
+    if covered < need * total:
         return None
     text = ' · '.join(parts)
     kind = FOOD if FOOD in kinds else DICT

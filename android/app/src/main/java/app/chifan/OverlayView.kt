@@ -41,8 +41,10 @@ class OverlayView(ctx: Context) : View(ctx) {
     /** true면 원래 글자 위에 덮어 그린다 (기본). false면 옆에 작은 라벨로 붙인다. */
     @Volatile var coverMode = true
 
-    private val coverBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xF7FFFDF9.toInt() }
-    private val coverText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2A211C.toInt(); isFakeBoldText = true }
+    // 어두운 바탕 + 흰 글자: 폰에 따라 오버레이 창이 반투명으로 보여도(터치를 통과시키려 80%로 깔리는 기종) 밑의 중국어가 비쳐 섞이지 않는다.
+    // 0.19까지의 밝은 바탕은 반투명이 되면 원문과 겹쳐 둘 다 못 읽었다.
+    private val coverBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2B2522.toInt() }
+    private val coverText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); isFakeBoldText = true }
     private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     /**
@@ -66,6 +68,7 @@ class OverlayView(ctx: Context) : View(ctx) {
             var size = (rowH * 0.72f).coerceIn(minSize, maxSize)
             coverText.textSize = size
             var rows = Paragraphs.splitLabel(l.text, l.rows)
+            if (rows.size < l.rows) r.bottom = r.top + 4 * d + rowH * rows.size      // 조각이 줄 수보다 적으면 윗줄만 덮는다
             var w = rows.maxOf { coverText.measureText(it) }
             // 안 들어가면 먼저 오른쪽 빈 자리(다음 글자 직전)까지 넓히고, 그래도 안 되면 글자를 줄인다
             if (w > avail) {

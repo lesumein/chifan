@@ -33,6 +33,10 @@ class Labeler(private val dict: Dict) {
         r("已售\\s*(\\d+)\\+?") { m -> "${m.groupValues[1]}+ 판매" },
         r("(\\d+)条评价") { m -> "리뷰 ${m.groupValues[1]}개" },
         r("(\\d+)%\\s*好评率?") { m -> "호평 ${m.groupValues[1]}%" },
+        r("好评\\s*(\\d+)%") { m -> "호평 ${m.groupValues[1]}%" },
+        r("(\\d+)瓶") { m -> "${m.groupValues[1]}병" },
+        r("(\\d+)份") { m -> "${m.groupValues[1]}인분" },
+        keep("\\d{4}[/.-]\\d{1,2}[/.-]\\d{1,2}"),              // 날짜
         r("好评率\\s*(\\d+)%") { m -> "호평 ${m.groupValues[1]}%" },
         r("(\\d+)选(\\d+)") { m -> "${m.groupValues[1]}택${m.groupValues[2]}" },
         r("(\\d+)\\s*[-~]\\s*(\\d+)\\s*人餐") { m -> "${m.groupValues[1]}~${m.groupValues[2]}인 세트" },
@@ -54,6 +58,17 @@ class Labeler(private val dict: Dict) {
         r("(\\d+)个") { m -> "${m.groupValues[1]}개" },
         r("(\\d+)\\s*次") { m -> "${m.groupValues[1]}회" },
         r("[xX×]\\s*(\\d+)") { m -> "x${m.groupValues[1]}" },
+        r("再减(\\d+(?:\\.\\d+)?)元") { m -> "¥${m.groupValues[1]} 추가 할인" },
+        r("省(?:了)?(\\d+(?:\\.\\d+)?)元") { m -> "¥${m.groupValues[1]} 절약" },
+        r("(\\d+(?:\\.\\d+)?)元") { m -> "¥${m.groupValues[1]}" },
+        r("(\\d+)天低价") { m -> "${m.groupValues[1]}일 최저가" },
+        r("购买之后(\\d+)天有效") { m -> "구매 후 ${m.groupValues[1]}일 유효" },
+        r("(\\d+)天") { m -> "${m.groupValues[1]}일" },
+        r("(\\d+)人推荐") { m -> "${m.groupValues[1]}명 추천" },
+        r("(\\d+)家门店通用") { m -> "${m.groupValues[1]}개 매장 공통" },
+        r("半年销量\\s*(\\d+)(\\+?)") { m -> "반년 ${m.groupValues[1]}${m.groupValues[2]} 판매" },
+        r("[(（]?[一-鿿]{2,8}店[)）]?$") { _ -> "" },               // 지점 이름(鲜鱼口店): 뜻 없이 지나가되 '읽은 것'으로 친다
+        keep("\\d+:\\d+\\s*[-~－]\\s*\\d+:\\d+"),            // 07:00-21:00
         keep("[+＋-]\\s*[¥￥]\\s*\\d+(?:\\.\\d+)?"),      // +¥4 같은 추가 요금
         keep("[¥￥]\\s*\\d+(?:\\.\\d+)?"),               // 가격은 그대로
         keep("\\d+:\\d+"),
@@ -61,11 +76,18 @@ class Labeler(private val dict: Dict) {
         keep("\\d+(?:\\.\\d+)?\\+?")                     // 그 밖의 숫자도 그대로
     )
 
+    private val priceStart = Regex("^[+＋-]?\\s*[¥￥]\\s*\\d")
+
+    /**
+     * 사전·규칙이 읽은 한자가 줄의 한자 60%(12자 넘는 문장은 75%) 이상이어야 덮는다 — 모르는 문장(리뷰·안내문)에
+     * 조각 몇 개만 붙여 덮으면 원문도 뜻도 못 읽는다. 가격으로 시작하는 줄(¥1.79 6折 ¥3)은 덮지 않는다 (full 은 만든다).
+     */
     fun label(raw: String): Result? {
         val s = raw.trim()
         if (!s.any { isHan(it) }) return null
         val parts = ArrayList<String>(); val fullParts = ArrayList<String>()
         var hanja = StringBuilder(); var strong = 0; var anyFood = false
+        var covered = 0; val total = s.count { isHan(it) }
         fun flushHanja() { if (hanja.isNotEmpty()) { fullParts.add(hanja.toString()); hanja = StringBuilder() } }
         var i = 0
         while (i < s.length) {
@@ -75,7 +97,10 @@ class Labeler(private val dict: Dict) {
                 if (m.range.first != i) continue
                 flushHanja()
                 if (rule.keep) { val t = m.value.replace("￥", "¥").replace(" ", ""); parts.add(t); fullParts.add(t) }
-                else rule.f!!(m)?.let { parts.add(it); fullParts.add(it); strong++ }
+                else {
+                    covered += m.value.count { isHan(it) }
+                    rule.f!!(m)?.let { if (it.isNotEmpty()) { parts.add(it); fullParts.add(it); strong++ } }
+                }
                 i = m.range.last + 1; matched = true; break
             }
             if (matched) continue
@@ -85,6 +110,7 @@ class Labeler(private val dict: Dict) {
             if (hit != null) {
                 flushHanja()
                 val ko = stripNote(hit.short).replace("🌶", "").trim()
+                covered += hit.zh.length
                 fullParts.add(stripNote(hit.ko).ifEmpty { hit.ko })
                 if (ko.isNotEmpty()) {
                     parts.add(ko)
@@ -100,7 +126,9 @@ class Labeler(private val dict: Dict) {
         if (fullParts.isEmpty()) return null
         val full = fullParts.joinToString(" · ")
         val kind = if (anyFood) OverlayView.Label.FOOD else OverlayView.Label.DICT
-        val text = if (parts.isEmpty() || strong == 0) null else parts.joinToString(" · ")
+        val need = if (total > 12) 0.75f else 0.6f
+        val coverOk = covered >= need * total && !priceStart.containsMatchIn(s)
+        val text = if (parts.isEmpty() || strong == 0 || !coverOk) null else parts.joinToString(" · ")
         return Result(text, full, kind)
     }
 

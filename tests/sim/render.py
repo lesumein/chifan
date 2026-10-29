@@ -31,7 +31,7 @@ def render(img_path, ocr_path, out_path, dp=None):
     drawn = []
     report = []
     from paragraph import group, split_label
-    paras = group(lines)
+    paras = group(lines, is_word=lambda w: dic.exact(w) is not None)
     boxes = [p['box'] for p in paras]
     for pr in sorted(paras, key=lambda p: (p['box'][1], p['box'][0])):
         l, t, r, b = pr['box']
@@ -59,6 +59,8 @@ def render(img_path, ocr_path, out_path, dp=None):
         if skip:
             continue
         rows = split_label(text, n)
+        if len(rows) < n:      # 조각이 줄 수보다 적으면 윗줄만 덮는다
+            box[3] = box[1] + 4 * dp + row_h * len(rows)
         size = max(8 * dp, min(17 * dp, row_h * 0.72))
         font = ImageFont.truetype(FONT, int(size))
         avail = (box[2] - box[0]) - 11 * dp
@@ -71,12 +73,12 @@ def render(img_path, ocr_path, out_path, dp=None):
         while w > avail and size > 8 * dp:
             size -= 1 * dp; font = ImageFont.truetype(FONT, int(size)); w = max(draw.textlength(rw, font=font) for rw in rows)
         rows = [rw if draw.textlength(rw, font=font) <= avail else _trim(draw, rw, font, avail) for rw in rows]
-        draw.rounded_rectangle(box, radius=5 * dp, fill=(255, 253, 249, 247))
+        draw.rounded_rectangle(box, radius=5 * dp, fill=(43, 37, 34, 255))
         draw.rounded_rectangle([box[0], box[1], box[0] + 3 * dp, box[3]], radius=2 * dp, fill=BAR[kind])
         asc, desc = font.getmetrics()
         for i, rw in enumerate(rows):
             cy = box[1] + 2 * dp + row_h * (i + 0.5)
-            draw.text((box[0] + 7 * dp, cy - (asc - desc) / 2), rw, font=font, fill=(42, 33, 28))
+            draw.text((box[0] + 7 * dp, cy - (asc - desc) / 2), rw, font=font, fill=(255, 255, 255))
         drawn.append(box)
     img.save(out_path)
     return report
