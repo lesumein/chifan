@@ -206,6 +206,8 @@ def _label(dic, raw, use_zi):
     used_zi = False
     zi_left = 3          # 한자음으로 읽을 수 있는 드문 글자 수
     lit = 0              # 글자 뜻·발음으로 읽은 글자 수 (직역)
+    multi = False        # 두 글자 이상 말이나 숫자 규칙이 있었나
+    loose = 0            # 일반 한 글자·글자 뜻·발음으로 읽은 한자 수 (잡음 판정)
 
     def flush():
         nonlocal zrun
@@ -234,6 +236,8 @@ def _label(dic, raw, use_zi):
         kind_, j, data = e
         if kind_ == 'rule':
             re_, f, m = data
+            if any(is_han(c) for c in m.group(0)) or f != 'keep':
+                multi = True
             flush()
             if f == 'keep':
                 parts.append(m.group(0).replace('￥', '¥').replace(' ', '')); kinds.append(DICT)
@@ -250,9 +254,13 @@ def _label(dic, raw, use_zi):
             flush()
             i0 = data
             parts.append(''.join(dic.sound.get(c) or dic.hanja.get(c, '') for c in s[i0:j])); kinds.append(HANJA)
-            covered += j - i0; cov_end = j; lit += j - i0
+            covered += j - i0; cov_end = j; lit += j - i0; loose += j - i0
         elif kind_ == 'word':
             i0, w, (short, ko, food) = data
+            if len(w) >= 2:
+                multi = True
+            elif w not in BOUND:
+                loose += 1
             flush()
             ko = strip_note(short).replace('🌶', '').strip()
             covered += len(w); cov_end = i0 + len(w)
@@ -262,11 +270,16 @@ def _label(dic, raw, use_zi):
                     strong += 1
         elif kind_ in ('zi', 'rare'):
             i0 = data
-            zrun.append(s[i0]); covered += 1; cov_end = i0 + 1; used_zi = True; lit += 1
+            zrun.append(s[i0]); covered += 1; cov_end = i0 + 1; used_zi = True; lit += 1; loose += 1
     flush()
     if use_zi:
         # 글자 뜻 단계: 거의 모든 한자를 읽었을 때만 (모르는 글자 하나쯤은 허용)
         if not parts or covered < max(total - 1, 0.9 * total):
+            return None
+        # 잡음 막기: 두 글자 이상 말·숫자 규칙이 하나도 없고, 일반 한 글자(조리 동사·모양·기본 음식 글자 BOUND 제외)·글자 뜻·발음으로
+        # 읽은 한자가 70%를 넘으면 덮지 않는다 (한자 3자 이하 짧은 줄 제외). 폰에서 사진 속 글씨·잘린 줄이 "막 · 찾은 · 지난…"이 됐다.
+        # 폰에서 사진 속 글씨·화면 위에 잘린 줄이 "막 · 찾은 · 지난 · 동료…"가 됐다.
+        if not multi and loose > 0.7 * total and total > 3:
             return None
         kind = HANJA if kinds.count(HANJA) * 2 >= len(kinds) else (FOOD if FOOD in kinds else DICT)
         return _join(parts), kind, covered, total, lit
@@ -360,8 +373,18 @@ def _join(parts):
     return ' · '.join(out)
 
 
+# 폰 OCR(ML Kit)이 자주 틀리게 읽는 글자 묶음 → 바로잡아 읽는다 (2026-10-30 폰 화면: 月售를 月昔으로)
+OCR_FIX = [('月昔', '月售'), ('已昔', '已售'), ('年昔', '年售'), ('选本格', '选规格'), ('选规恪', '选规格'), ('选现格', '选规格')]
+
+
+def fix_ocr(raw):
+    for a, b in OCR_FIX:
+        raw = raw.replace(a, b)
+    return raw
+
+
 def label(dic, raw):
-    raw = ''.join(dic.t2s.get(c, c) for c in raw)
+    raw = fix_ocr(''.join(dic.t2s.get(c, c) for c in raw))
     return _label2(dic, raw)
 
 
@@ -382,7 +405,7 @@ def _label2(dic, raw):
 
 def strict(dic, raw):
     """엄격한 번역: 사전 항목(한 글자 음식어 포함)과 규칙만으로 한자를 전부 읽었나 — 글자 뜻·발음 직역이 하나도 없이. (라벨, 참/거짓)"""
-    raw = ''.join(dic.t2s.get(c, c) for c in raw)
+    raw = fix_ocr(''.join(dic.t2s.get(c, c) for c in raw))
     s = raw.strip()
     if not any(is_han(c) for c in s) or PRICE_START.match(s):
         return None, True

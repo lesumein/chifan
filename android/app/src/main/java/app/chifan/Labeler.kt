@@ -112,8 +112,12 @@ class Labeler(private val dict: Lexicon) {
 
     private class Pass(val text: String, val kind: Int, val covered: Int, val total: Int)
 
+    /** 폰 OCR(ML Kit)이 자주 틀리게 읽는 글자 묶음 (2026-10-30 폰 화면: 月售를 月昔으로) */
+    private val ocrFix = listOf("月昔" to "月售", "已昔" to "已售", "年昔" to "年售", "选本格" to "选规格", "选规恪" to "选规格", "选现格" to "选规格")
+    private fun fixOcr(t: String): String { var r = t; for ((a, b) in ocrFix) r = r.replace(a, b); return r }
+
     fun label(raw0: String): Result? {
-        val raw = dict.simp(raw0)
+        val raw = fixOcr(dict.simp(raw0))
         val s = raw.trim()
         if (!s.any { isHan(it) } || priceStart.containsMatchIn(s)) return null
         val total = s.count { isHan(it) }
@@ -131,6 +135,8 @@ class Labeler(private val dict: Lexicon) {
         var strong = 0; var covered = 0; var covEnd = 0
         val total = s.count { isHan(it) }
         val zrun = StringBuilder()
+        var multi = false   // 두 글자 이상 말이나 숫자 규칙이 있었나
+        var loose = 0       // 일반 한 글자·글자 뜻·발음으로 읽은 한자 수 (잡음 판정)
         val DICT = OverlayView.Label.DICT; val FOOD = OverlayView.Label.FOOD; val HANJA = OverlayView.Label.HANJA
         fun flush() {
             if (zrun.isEmpty()) return
@@ -155,6 +161,7 @@ class Labeler(private val dict: Lexicon) {
             when (e.kind) {
                 Seg.RULE -> {
                     val m = e.m!!; val rule = e.rule!!
+                    if (m.value.any { isHan(it) } || !rule.keep) multi = true
                     flush()
                     if (rule.keep) { parts.add(m.value.replace("￥", "¥").replace(" ", "")); kinds.add(DICT) }
                     else {
@@ -168,10 +175,11 @@ class Labeler(private val dict: Lexicon) {
                 Seg.TRANSLIT -> {
                     flush()
                     parts.add(buildString { for (k in e.start until e.end) append(dict.sound(s[k]) ?: dict.hanja(s[k]) ?: "") }); kinds.add(HANJA)
-                    covered += e.end - e.start; covEnd = e.end
+                    covered += e.end - e.start; covEnd = e.end; loose += e.end - e.start
                 }
                 Seg.WORD -> {
                     val hit = e.hit!!
+                    if (hit.zh.length >= 2) multi = true else if (hit.zh[0] !in BOUND) loose++
                     flush()
                     val ko = stripNote(hit.short).replace("🌶", "").trim()
                     covered += hit.zh.length; covEnd = e.end
@@ -180,13 +188,16 @@ class Labeler(private val dict: Lexicon) {
                         if (hit.zh.length >= 2 || hit.foodId != null || s.length == 1) strong++   // 한 글자 칩(热·大·小)은 줄 전체가 그 글자일 때만
                     }
                 }
-                Seg.ZI, Seg.RARE -> { zrun.append(s[e.start]); covered++; covEnd = e.end }
+                Seg.ZI, Seg.RARE -> { zrun.append(s[e.start]); covered++; covEnd = e.end; loose++ }
             }
         }
         flush()
         if (useZi) {
             // 글자 뜻 단계: 거의 모든 한자를 읽었을 때만 (모르는 글자 하나쯤은 허용)
             if (parts.isEmpty() || covered < maxOf(total - 1.0, 0.9 * total)) return null
+            // 잡음 막기: 두 글자 이상 말·숫자 규칙이 하나도 없고 일반 한 글자·직역이 70%를 넘으면 덮지 않는다 (한자 3자 이하 제외).
+            // 폰에서 사진 속 글씨·화면 위에 잘린 줄이 "막 · 찾은 · 지난…"이 됐다.
+            if (!multi && loose > 0.7 * total && total > 3) return null
             val kind = if (kinds.count { it == HANJA } * 2 >= kinds.size) HANJA else if (FOOD in kinds) FOOD else DICT
             return Pass(join(parts), kind, covered, total)
         }

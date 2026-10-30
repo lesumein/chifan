@@ -43,8 +43,10 @@ class OverlayView(ctx: Context) : View(ctx) {
 
     // 어두운 바탕 + 흰 글자: 폰에 따라 오버레이 창이 반투명으로 보여도(터치를 통과시키려 80%로 깔리는 기종) 밑의 중국어가 비쳐 섞이지 않는다.
     // 0.19까지의 밝은 바탕은 반투명이 되면 원문과 겹쳐 둘 다 못 읽었다.
-    private val coverBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2B2522.toInt() }
-    private val coverText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); isFakeBoldText = true }
+    private val coverBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF16120F.toInt() }
+    // 안드로이드는 터치가 통과하는 오버레이를 최대 80% 불투명으로만 보여 주므로(그 이상이면 아래 앱 터치를 막는다) 밑의 글자가 조금 비친다.
+    // 글자에 어두운 그림자를 둘러 비친 원문보다 또렷하게 한다.
+    private val coverText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); isFakeBoldText = true; setShadowLayer(3f * resources.displayMetrics.density, 0f, 0f, 0xFF000000.toInt()) }
     private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     /**
