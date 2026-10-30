@@ -130,7 +130,7 @@ RULES = [
     (re.compile(r'(\d+)人推荐'), lambda m: f"{m.group(1)}명 추천"),
     (re.compile(r'(\d+)家门店通用'), lambda m: f"{m.group(1)}개 매장 공통"),
     (re.compile(r'半年销量\s*(\d+)(\+?)'), lambda m: f"반년 {m.group(1)}{m.group(2)} 판매"),
-    (re.compile(r'[(（][一-鿿]{2,8}店[)）]'), lambda m: ''),      # (鲜鱼口店) 괄호 속 지점 이름: 뜻 없이 지나간다      # 지점 이름(鲜鱼口店): 뜻 없이 지나가되 '읽은 것'으로 친다
+    (re.compile(r'[(（][一-鿿]{2,8}店[)）]'), lambda m: '지점'),   # (鲜鱼口店) 괄호 속 지점 이름 → "지점"      # 지점 이름(鲜鱼口店): 뜻 없이 지나가되 '읽은 것'으로 친다
     (re.compile(r'\d+:\d+\s*[-~－]\s*\d+:\d+'), 'keep'),       # 07:00-21:00
     (re.compile(r'[+＋-]\s*[¥￥]\s*\d+(?:\.\d+)?'), 'keep'),     # +¥4 같은 추가 요금
     (re.compile(r'[¥￥]\s*\d+(?:\.\d+)?'), 'keep'),             # 가격은 그대로
@@ -184,7 +184,7 @@ def longest(dic, s, i, maxn=99, any_single=False, minn=1):
     return None
 
 
-PRICE_START = re.compile(r'^[+＋-]?\s*[¥￥]\s*\d')
+PRICE_START = re.compile(r'^[+＋-]?\s*[¥￥]\s*\d+(?:\.\d+)?(?![\d.]|\s*起送)')   # 가격으로 시작하는 줄 (￥20起送 은 아님)
 
 
 def _label(dic, raw, use_zi):

@@ -92,7 +92,7 @@ class Labeler(private val dict: Lexicon) {
         r("(\\d+)人推荐") { m -> "${m.groupValues[1]}명 추천" },
         r("(\\d+)家门店通用") { m -> "${m.groupValues[1]}개 매장 공통" },
         r("半年销量\\s*(\\d+)(\\+?)") { m -> "반년 ${m.groupValues[1]}${m.groupValues[2]} 판매" },
-        r("[(（][一-鿿]{2,8}店[)）]") { _ -> "" },               // (鲜鱼口店) 괄호 속 지점 이름: 뜻 없이 지나간다
+        r("[(（][一-鿿]{2,8}店[)）]") { _ -> "지점" },            // (鲜鱼口店) 괄호 속 지점 이름 → "지점"
         keep("\\d+:\\d+\\s*[-~－]\\s*\\d+:\\d+"),            // 07:00-21:00
         keep("[+＋-]\\s*[¥￥]\\s*\\d+(?:\\.\\d+)?"),      // +¥4 같은 추가 요금
         keep("[¥￥]\\s*\\d+(?:\\.\\d+)?"),               // 가격은 그대로
@@ -108,7 +108,7 @@ class Labeler(private val dict: Lexicon) {
         return if (x in 0.1..9.9) "-${Math.round((10 - x) * 10)}%" else null
     }
 
-    private val priceStart = Regex("^[+＋-]?\\s*[¥￥]\\s*\\d")
+    private val priceStart = Regex("^[+＋-]?\\s*[¥￥]\\s*\\d+(?:\\.\\d+)?(?![\\d.]|\\s*起送)")   // 가격으로 시작하는 줄 (￥20起送 은 아님)
 
     private class Pass(val text: String, val kind: Int, val covered: Int, val total: Int)
 
@@ -214,8 +214,7 @@ class Labeler(private val dict: Lexicon) {
 
     private fun ruleAt(s: String, i: Int): Pair<Rule, MatchResult>? {
         for (rule in rules) {
-            val m = rule.re.find(s, i) ?: continue
-            if (m.range.first != i) continue
+            val m = rule.re.matchAt(s, i) ?: continue   // 그 자리에서만 맞춰 본다 (find 는 줄 끝까지 찾아 느렸다)
             if (rule.re === cnum) {   // 한자 숫자: 그보다 길거나 같은 사전 말(二十四节气·三十六味)이 있으면 사전 우선
                 val w2 = longest(s, i, 99, false, 2)
                 if (w2 != null && w2.zh.length >= m.range.last + 1 - i) continue
