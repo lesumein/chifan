@@ -113,6 +113,8 @@ RULES = [
     (re.compile(r'(\d+(?:\.\d+)?)\s*km'), lambda m: f"{m.group(1)}km"),
     (re.compile(r'(\d+(?:\.\d+)?)\s*(?:公里|千米)'), lambda m: f"{m.group(1)}km"),
     (re.compile(r'(\d+(?:\.\d+)?)\s*米'), lambda m: f"{m.group(1)}m"),
+    (re.compile(r'(\d+)\s*两'), lambda m: f"{m.group(1)}량({int(m.group(1)) * 50}g)"),
+    (re.compile(r'(\d+(?:\.\d+)?)\s*斤'), lambda m: f"{m.group(1)}근"),
     (re.compile(r'第(\d+)名'), lambda m: f"{m.group(1)}위"),
     (re.compile(r'(\d+)人份'), lambda m: f"{m.group(1)}인분"),
     (re.compile(r'(\d+)号楼'), lambda m: f"{m.group(1)}동"),
@@ -225,17 +227,13 @@ def _label(dic, raw, use_zi):
         if out:
             parts.append(' '.join(out)); kinds.append(HANJA)
         zrun = []
-    i = 0
-    while i < len(s):
-        matched = False
-        for re_, f in RULES:
-            m = re_.match(s, i)
-            if not m:
-                continue
-            if re_ is CNUM:                      # 한자 숫자: 그보다 길거나 같은 사전 말(二十四节气·三十六味)이 있으면 사전 우선
-                w2 = longest(dic, s, i, 99, False, 2)
-                if w2 and len(w2[0]) >= m.end() - i:
-                    continue
+    # 줄 전체에서 가장 자연스러운 분절을 고른다 (동적 계획법). 0.26까지는 앞에서부터 가장 긴 말을 먼저 잡아
+    # 炒米粉 → 炒米+粉("볶은 쌀 · 쌀국수")처럼 틀렸다. 비용: 규칙 0.5, 여러 글자 말 1, 한 글자 말 1(조리 동사 등·홀로) / 1.6(그 밖),
+    # 음역어 2, 글자 뜻 2.5, 드문 글자 발음 3, 못 읽은 한자 5, 한자 아닌 글자 0.
+    for e in _segment(dic, s, use_zi):
+        kind_, j, data = e
+        if kind_ == 'rule':
+            re_, f, m = data
             flush()
             if f == 'keep':
                 parts.append(m.group(0).replace('￥', '¥').replace(' ', '')); kinds.append(DICT)
@@ -245,41 +243,26 @@ def _label(dic, raw, use_zi):
                 if any(is_han(c) for c in m.group(0)): cov_end = m.end()
                 if t:
                     parts.append(t); kinds.append(DICT); strong += 1
-            i = m.end(); matched = True
-            break
-        if matched:
-            continue
-        c = s[i]
-        if not is_han(c):
-            i += 1; continue
-        if use_zi:
-            j = i
-            while j < len(s) and s[j] in TRANSLIT and not longest(dic, s, j, 99, False, 2):
-                j += 1
-            if j - i >= 3:                    # 음역어: 발음으로
+        elif kind_ == 'skip':
+            if is_han(s[data]):
                 flush()
-                parts.append(''.join(dic.sound.get(c) or dic.hanja.get(c, '') for c in s[i:j])); kinds.append(HANJA)
-                covered += j - i; cov_end = j; lit += j - i; i = j
-                continue
-        hit = best(dic, s, i, use_zi)
-        if hit:
+        elif kind_ == 'translit':
             flush()
-            w, (short, ko, food) = hit
+            i0 = data
+            parts.append(''.join(dic.sound.get(c) or dic.hanja.get(c, '') for c in s[i0:j])); kinds.append(HANJA)
+            covered += j - i0; cov_end = j; lit += j - i0
+        elif kind_ == 'word':
+            i0, w, (short, ko, food) = data
+            flush()
             ko = strip_note(short).replace('🌶', '').strip()
-            covered += len(w); cov_end = i + len(w)
+            covered += len(w); cov_end = i0 + len(w)
             if ko:
                 parts.append(ko); kinds.append(FOOD if food else DICT)
                 if len(w) >= 2 or food or len(s) == 1:   # 한 글자 칩(热·大·小)은 줄 전체가 그 글자일 때만 인정
                     strong += 1
-            i += len(w); continue
-        if use_zi and c in dic.zi:
-            zrun.append(c); covered += 1; cov_end = i + 1; used_zi = True; lit += 1
-            i += 1; continue
-        if use_zi and (c in dic.hanja or c in dic.sound) and zi_left > 0:     # 뜻 표에도 없는 드문 글자: 한자음 (고유명사 읽듯). 줄당 2자까지
-            zrun.append(c); covered += 1; cov_end = i + 1; used_zi = True; zi_left -= 1; lit += 1
-            i += 1; continue
-        flush()
-        i += 1   # 사전에 없는 한자: 건너뜀
+        elif kind_ in ('zi', 'rare'):
+            i0 = data
+            zrun.append(s[i0]); covered += 1; cov_end = i0 + 1; used_zi = True; lit += 1
     flush()
     if use_zi:
         # 글자 뜻 단계: 거의 모든 한자를 읽었을 때만 (모르는 글자 하나쯤은 허용)
@@ -298,6 +281,75 @@ def _label(dic, raw, use_zi):
     text = _join(parts)
     kind = FOOD if FOOD in kinds else DICT
     return text, kind, covered, total, 0
+
+
+def _rule_at(dic, s, i):
+    for re_, f in RULES:
+        m = re_.match(s, i)
+        if not m:
+            continue
+        if re_ is CNUM:                      # 한자 숫자: 그보다 길거나 같은 사전 말(二十四节气·三十六味)이 있으면 사전 우선
+            w2 = longest(dic, s, i, 99, False, 2)
+            if w2 and len(w2[0]) >= m.end() - i:
+                continue
+        return re_, f, m
+    return None
+
+
+def _segment(dic, s, use_zi):
+    """가장 비용이 낮은 분절. [(종류, 끝 위치, 자료)]"""
+    n = len(s)
+    INF = float('inf')
+    cost = [INF] * (n + 1); back = [None] * (n + 1)
+    cost[0] = 0.0
+    rare_ok = use_zi
+    for i in range(n):
+        if cost[i] == INF:
+            continue
+        c0 = cost[i]
+        def relax(j, cst, e):
+            if c0 + cst < cost[j] - 1e-9:
+                cost[j] = c0 + cst; back[j] = (i, e)
+        r = _rule_at(dic, s, i)
+        if r:
+            relax(r[2].end(), 0.5, ('rule', r[2].end(), r))
+            continue                          # 규칙이 맞는 자리는 규칙만 (0.26과 같음)
+        ch = s[i]
+        if not is_han(ch):
+            relax(i + 1, 0.0, ('skip', i + 1, i)); continue
+        if use_zi:
+            j = i
+            while j < n and s[j] in TRANSLIT and not longest(dic, s, j, 99, False, 2):
+                j += 1
+            if j - i >= 3:
+                relax(j, 2.0, ('translit', j, i))
+        nmax = min(dic.max_len, n - i)
+        for L in range(nmax, 0, -1):
+            w = s[i:i + L]
+            if not all(is_han(x) for x in w):
+                continue
+            h = dic.exact(w)
+            if not h:
+                continue
+            # 같은 비용이면 앞쪽 말을 길게 잡는 쪽 (0.26의 '가장 긴 말 먼저'와 같은 결과): 짧은 말은 앞에 올수록 아주 조금 비싸게
+            tie = 0.001 * (n - i) / L
+            if L >= 2:
+                relax(i + L, 1.0 + tie, ('word', i + L, (i, w, h)))
+            else:
+                prev_han = i > 0 and is_han(s[i - 1]); next_han = i + 1 < n and is_han(s[i + 1])
+                if (not prev_han and not next_han) or w in BOUND:
+                    relax(i + 1, 1.0 + tie, ('word', i + 1, (i, w, h)))
+                elif use_zi:
+                    relax(i + 1, 1.6 + tie, ('word', i + 1, (i, w, h)))
+        if use_zi and ch in dic.zi:
+            relax(i + 1, 2.5, ('zi', i + 1, i))
+        elif use_zi and (ch in dic.hanja or ch in dic.sound):
+            relax(i + 1, 3.0, ('rare', i + 1, i))
+        relax(i + 1, 5.0, ('skip', i + 1, i))
+    out = []; j = n
+    while j > 0:
+        i, e = back[j]; out.append(e); j = i
+    return out[::-1]
 
 
 def _join(parts):

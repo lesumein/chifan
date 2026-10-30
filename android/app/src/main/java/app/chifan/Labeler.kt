@@ -75,6 +75,8 @@ class Labeler(private val dict: Lexicon) {
         r("(\\d+(?:\\.\\d+)?)\\s*km") { m -> "${m.groupValues[1]}km" },
         r("(\\d+(?:\\.\\d+)?)\\s*(?:公里|千米)") { m -> "${m.groupValues[1]}km" },
         r("(\\d+(?:\\.\\d+)?)\\s*米") { m -> "${m.groupValues[1]}m" },
+        r("(\\d+)\\s*两") { m -> "${m.groupValues[1]}량(${m.groupValues[1].toInt() * 50}g)" },
+        r("(\\d+(?:\\.\\d+)?)\\s*斤") { m -> "${m.groupValues[1]}근" },
         r("第(\\d+)名") { m -> "${m.groupValues[1]}위" },
         r("(\\d+)人份") { m -> "${m.groupValues[1]}인분" },
         r("(\\d+)号楼") { m -> "${m.groupValues[1]}동" },
@@ -128,7 +130,7 @@ class Labeler(private val dict: Lexicon) {
         val parts = ArrayList<String>(); val kinds = ArrayList<Int>()
         var strong = 0; var covered = 0; var covEnd = 0
         val total = s.count { isHan(it) }
-        val zrun = StringBuilder(); var ziLeft = 3
+        val zrun = StringBuilder()
         val DICT = OverlayView.Label.DICT; val FOOD = OverlayView.Label.FOOD; val HANJA = OverlayView.Label.HANJA
         fun flush() {
             if (zrun.isEmpty()) return
@@ -147,55 +149,39 @@ class Labeler(private val dict: Lexicon) {
             if (out.isNotEmpty()) { parts.add(out.joinToString(" ")); kinds.add(HANJA) }
             zrun.clear()
         }
-        var i = 0
-        loop@ while (i < s.length) {
-            for (rule in rules) {
-                val m = rule.re.find(s, i) ?: continue
-                if (m.range.first != i) continue
-                if (rule.re === cnum) {   // 한자 숫자: 그보다 길거나 같은 사전 말(二十四节气·三十六味)이 있으면 사전 우선
-                    val w2 = longest(s, i, 99, false, 2)
-                    if (w2 != null && w2.zh.length >= m.range.last + 1 - i) continue
-                }
-                flush()
-                if (rule.keep) { parts.add(m.value.replace("￥", "¥").replace(" ", "")); kinds.add(DICT) }
-                else {
-                    val t = rule.f!!(m)
-                    covered += m.value.count { isHan(it) }
-                    if (m.value.any { isHan(it) }) covEnd = m.range.last + 1
-                    if (!t.isNullOrEmpty()) { parts.add(t); kinds.add(DICT); strong++ }
-                }
-                i = m.range.last + 1
-                continue@loop
-            }
-            val c = s[i]
-            if (!isHan(c)) { i++; continue }
-            if (useZi) {
-                var j = i
-                while (j < s.length && s[j] in TRANSLIT && longest(s, j, 99, false, 2) == null) j++
-                if (j - i >= 3) {                  // 음역어: 발음으로 (洪都拉斯 → 훙더우라쓰)
+        // 줄 전체에서 가장 자연스러운 분절을 고른다 (동적 계획법, tests/sim/labeler.py _segment 와 같음).
+        // 0.26까지는 앞에서부터 가장 긴 말을 먼저 잡아 咖喱鸡肉 → 咖喱鸡+肉("카레 닭 · 고기")처럼 틀렸다.
+        for (e in segment(s, useZi)) {
+            when (e.kind) {
+                Seg.RULE -> {
+                    val m = e.m!!; val rule = e.rule!!
                     flush()
-                    parts.add(buildString { for (k in i until j) append(dict.sound(s[k]) ?: dict.hanja(s[k]) ?: "") }); kinds.add(HANJA)
-                    covered += j - i; covEnd = j; i = j
-                    continue
+                    if (rule.keep) { parts.add(m.value.replace("￥", "¥").replace(" ", "")); kinds.add(DICT) }
+                    else {
+                        val t = rule.f!!(m)
+                        covered += m.value.count { isHan(it) }
+                        if (m.value.any { isHan(it) }) covEnd = m.range.last + 1
+                        if (!t.isNullOrEmpty()) { parts.add(t); kinds.add(DICT); strong++ }
+                    }
                 }
-            }
-            val hit = best(s, i, useZi)
-            if (hit != null) {
-                flush()
-                val ko = stripNote(hit.short).replace("🌶", "").trim()
-                covered += hit.zh.length; covEnd = i + hit.zh.length
-                if (ko.isNotEmpty()) {
-                    parts.add(ko); kinds.add(if (hit.foodId != null) FOOD else DICT)
-                    if (hit.zh.length >= 2 || hit.foodId != null || s.length == 1) strong++   // 한 글자 칩(热·大·小)은 줄 전체가 그 글자일 때만
+                Seg.SKIP -> if (isHan(s[e.start])) flush()
+                Seg.TRANSLIT -> {
+                    flush()
+                    parts.add(buildString { for (k in e.start until e.end) append(dict.sound(s[k]) ?: dict.hanja(s[k]) ?: "") }); kinds.add(HANJA)
+                    covered += e.end - e.start; covEnd = e.end
                 }
-                i += hit.zh.length; continue
+                Seg.WORD -> {
+                    val hit = e.hit!!
+                    flush()
+                    val ko = stripNote(hit.short).replace("🌶", "").trim()
+                    covered += hit.zh.length; covEnd = e.end
+                    if (ko.isNotEmpty()) {
+                        parts.add(ko); kinds.add(if (hit.foodId != null) FOOD else DICT)
+                        if (hit.zh.length >= 2 || hit.foodId != null || s.length == 1) strong++   // 한 글자 칩(热·大·小)은 줄 전체가 그 글자일 때만
+                    }
+                }
+                Seg.ZI, Seg.RARE -> { zrun.append(s[e.start]); covered++; covEnd = e.end }
             }
-            if (useZi && dict.zi(c) != null) { zrun.append(c); covered++; covEnd = i + 1; i++; continue }
-            if (useZi && (dict.hanja(c) != null || dict.sound(c) != null) && ziLeft > 0) {   // 뜻 표에도 없는 드문 글자: 한자음 (고유명사 읽듯)
-                zrun.append(c); covered++; covEnd = i + 1; ziLeft--; i++; continue
-            }
-            flush()
-            i++   // 사전에 없는 한자: 건너뜀
         }
         flush()
         if (useZi) {
@@ -210,6 +196,63 @@ class Labeler(private val dict: Lexicon) {
         val lastHan = s.indexOfLast { isHan(it) }
         if (total <= 8 && covEnd <= lastHan) return null   // 짧은 이름은 끝(음식 본체)을 읽어야 덮는다: 湖南糖粑 → "후난" 같은 오해 방지
         return Pass(join(parts), if (FOOD in kinds) FOOD else DICT, covered, total)
+    }
+
+    private enum class Seg { RULE, SKIP, TRANSLIT, WORD, ZI, RARE }
+    private class Edge(val kind: Seg, val start: Int, val end: Int, val hit: Hit? = null, val rule: Rule? = null, val m: MatchResult? = null)
+
+    private fun ruleAt(s: String, i: Int): Pair<Rule, MatchResult>? {
+        for (rule in rules) {
+            val m = rule.re.find(s, i) ?: continue
+            if (m.range.first != i) continue
+            if (rule.re === cnum) {   // 한자 숫자: 그보다 길거나 같은 사전 말(二十四节气·三十六味)이 있으면 사전 우선
+                val w2 = longest(s, i, 99, false, 2)
+                if (w2 != null && w2.zh.length >= m.range.last + 1 - i) continue
+            }
+            return rule to m
+        }
+        return null
+    }
+
+    /** 가장 비용이 낮은 분절. 비용: 규칙 0.5, 여러 글자 말 1, 한 글자 말 1(조리 동사 등·홀로)/1.6(그 밖), 음역어 2, 글자 뜻 2.5, 드문 글자 발음 3, 못 읽은 한자 5 */
+    private fun segment(s: String, useZi: Boolean): List<Edge> {
+        val n = s.length
+        val cost = DoubleArray(n + 1) { Double.POSITIVE_INFINITY }; val back = arrayOfNulls<Edge>(n + 1)
+        cost[0] = 0.0
+        for (i in 0 until n) {
+            if (cost[i] == Double.POSITIVE_INFINITY) continue
+            val c0 = cost[i]
+            fun relax(e: Edge, cst: Double) { if (c0 + cst < cost[e.end] - 1e-9) { cost[e.end] = c0 + cst; back[e.end] = e } }
+            val r = ruleAt(s, i)
+            if (r != null) { relax(Edge(Seg.RULE, i, r.second.range.last + 1, rule = r.first, m = r.second), 0.5); continue }
+            val ch = s[i]
+            if (!isHan(ch)) { relax(Edge(Seg.SKIP, i, i + 1), 0.0); continue }
+            if (useZi) {
+                var j = i
+                while (j < n && s[j] in TRANSLIT && longest(s, j, 99, false, 2) == null) j++
+                if (j - i >= 3) relax(Edge(Seg.TRANSLIT, i, j), 2.0)
+            }
+            for (L in minOf(dict.maxLen, n - i) downTo 1) {
+                val w = s.substring(i, i + L)
+                if (!w.all { isHan(it) }) continue
+                val h = dict.exact(w) ?: continue
+                // 같은 비용이면 앞쪽 말을 길게 잡는 쪽: 짧은 말은 앞에 올수록 아주 조금 비싸게
+                val tie = 0.001 * (n - i) / L
+                if (L >= 2) relax(Edge(Seg.WORD, i, i + L, hit = h), 1.0 + tie)
+                else {
+                    val prevHan = i > 0 && isHan(s[i - 1]); val nextHan = i + 1 < n && isHan(s[i + 1])
+                    if ((!prevHan && !nextHan) || w[0] in BOUND) relax(Edge(Seg.WORD, i, i + 1, hit = h), 1.0 + tie)
+                    else if (useZi) relax(Edge(Seg.WORD, i, i + 1, hit = h), 1.6 + tie)
+                }
+            }
+            if (useZi && dict.zi(ch) != null) relax(Edge(Seg.ZI, i, i + 1), 2.5)
+            else if (useZi && (dict.hanja(ch) != null || dict.sound(ch) != null)) relax(Edge(Seg.RARE, i, i + 1), 3.0)
+            relax(Edge(Seg.SKIP, i, i + 1), 5.0)
+        }
+        val out = ArrayList<Edge>(); var j = n
+        while (j > 0) { val e = back[j]!!; out.add(e); j = e.start }
+        out.reverse()
+        return out
     }
 
     /** 같은 말 되풀이는 하나로 ("쿠키 · 쿠키") */
