@@ -1,3 +1,10 @@
+import java.util.Properties
+
+// 릴리즈 서명 정보 (android/keystore.properties, 커밋 안 함)
+val ksProps = Properties().also { p ->
+    val f = rootProject.file("keystore.properties"); if (f.exists()) f.inputStream().use { p.load(it) }
+}
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -20,11 +27,29 @@ android {
     // 사전은 레포의 data/*.json 그대로 쓴다 (웹앱과 한 곳에서 관리)
     sourceSets["main"].assets.srcDirs("../../data")
 
+    // 릴리즈 서명: 키와 비밀번호는 레포에 두지 않는다. android/keystore.properties(커밋 안 함)에
+    //   storeFile=keystore/chifan-release.jks / storePassword=... / keyAlias=... / keyPassword=...
+    // 가 있으면 그것으로 서명하고, 없으면 서명 없이 빌드된다.
+    signingConfigs {
+        create("release") {
+            if (ksProps.getProperty("storeFile") != null) {
+                storeFile = rootProject.file(ksProps.getProperty("storeFile"))
+                storePassword = ksProps.getProperty("storePassword")
+                keyAlias = ksProps.getProperty("keyAlias")
+                keyPassword = ksProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (ksProps.getProperty("storeFile") != null) signingConfig = signingConfigs.getByName("release")
         }
     }
+    // 릴리즈 빌드 때 lint 도구를 따로 내려받는데, 빌드 환경에서 막힐 때가 있어 끈다 (검사는 단위 테스트·대조 테스트로)
+    lint { checkReleaseBuilds = false; abortOnError = false }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

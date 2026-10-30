@@ -4,3 +4,7 @@ android/app/build/
 android/local.properties
 android/.kotlin/
 __pycache__/
+
+# 릴리즈 서명 키 (레포에 올리지 않음)
+android/keystore/
+android/keystore.properties
