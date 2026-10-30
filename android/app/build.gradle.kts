@@ -18,8 +18,8 @@ android {
         applicationId = "app.chifan"
         minSdk = 26
         targetSdk = 35
-        versionCode = 29
-        versionName = "0.29"
+        versionCode = 30
+        versionName = "0.30"
         // OCR 네이티브 라이브러리가 CPU 종류마다 10MB씩이라 arm64(2017년 이후 폰)만 넣는다
         ndk { abiFilters += listOf("arm64-v8a") }
     }
