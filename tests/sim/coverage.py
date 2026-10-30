@@ -3,20 +3,30 @@
   python3 tests/sim/coverage.py 말뭉치.txt [다른.txt ...] [화면.ocr.json ...]  [-v: 못 붙인 줄 보기]"""
 import sys, os, json
 sys.path.insert(0, os.path.dirname(__file__))
-from labeler import Dict, label, is_han, PRICE_START, HANJA
+from labeler import Dict, label, strict, _label, is_han, PRICE_START, HANJA
 d = Dict()
 verbose = '-v' in sys.argv
-for path in [a for a in sys.argv[1:] if a != '-v']:
+for path in [a for a in sys.argv[1:] if a not in ('-v', '-s')]:
     lines = [l['text'] for l in json.load(open(path, encoding='utf-8'))] if path.endswith('.json') else open(path, encoding='utf-8').read().split('\n')
     lines = [l.strip() for l in lines if l.strip() and any(is_han(c) for c in l) and not PRICE_START.match(l.strip())]
-    ok = lit = 0; miss = []
+    ok = lit = st = wd = 0; miss = []; smiss = []
     for l in lines:
         r = label(d, l)
         if r:
             ok += 1; lit += r[1] == HANJA
         else:
             miss.append(l)
+        t = ''.join(d.t2s.get(c, c) for c in l)
+        w = _label(d, t, False)
+        if w and w[2] >= sum(1 for c in t if is_han(c)):
+            wd += 1                    # 여러 글자 단어·규칙만으로 (한 글자 형태소 없이)
+        if strict(d, l)[1]:
+            st += 1
+        else:
+            smiss.append(l)
     n = max(len(lines), 1)
-    print(f"{path}: {ok}/{len(lines)} = {ok / n * 100:.2f}%  (직역 {lit / n * 100:.1f}%)")
+    print(f"{path}: 엄격(사전 항목만, 직역 0) {st}/{len(lines)} = {st / n * 100:.2f}%  |  그중 단어만으로 {wd / n * 100:.1f}%  |  라벨 있음 {ok / n * 100:.2f}% (직역 {lit / n * 100:.1f}%)")
+    if '-s' in sys.argv:
+        print('  엄격 실패:', ' / '.join(smiss[:400]))
     if verbose and miss:
         print('  못 붙임:', ' / '.join(miss))

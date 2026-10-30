@@ -48,8 +48,25 @@ def _zhe(v):
     return f"-{round((10 - x) * 10)}%" if 0.1 <= x <= 9.9 else None
 
 
+_CN = {'零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9}
+
+
+def _cnum(t):
+    """한자 숫자 → 아라비아 숫자 (三十六 → 36, 一百二 → 120)"""
+    total, cur = 0, 0
+    for c in t:
+        if c in _CN:
+            cur = _CN[c]
+        else:
+            u = {'十': 10, '百': 100, '千': 1000}[c]
+            total += (cur or 1) * u; cur = 0
+    return str(total + cur)
+
+
 # 숫자 규칙. 위에서부터 먼저 맞는 것. None 이면 그 자리엔 라벨 없이 지나감. 'keep' 이면 원문 그대로 둔다.
+CNUM = re.compile(r'(?=[一二三四五六七八九两十百千]{2})[一二三四五六七八九两]?[十百千](?:[一二三四五六七八九两]?[十百])*[一二三四五六七八九]?')
 RULES = [
+    (CNUM, lambda m: _cnum(m.group(0))),
     (re.compile(r'(\d+(?:\.\d+)?)折'), lambda m: _zhe(m.group(1))),
     (re.compile(r'已减(\d+(?:\.\d+)?)元'), lambda m: f"¥{m.group(1)} 할인됨"),
     (re.compile(r'已优惠[¥￥]?(\d+(?:\.\d+)?)'), lambda m: f"¥{m.group(1)} 할인됨"),
@@ -94,6 +111,8 @@ RULES = [
     (re.compile(r'预计\s*(\d+:\d+)\s*送达'), lambda m: f"{m.group(1)} 도착 예정"),
     (re.compile(r'距您\s*(\d+(?:\.\d+)?)\s*km'), lambda m: f"{m.group(1)}km 거리"),
     (re.compile(r'(\d+(?:\.\d+)?)\s*km'), lambda m: f"{m.group(1)}km"),
+    (re.compile(r'(\d+(?:\.\d+)?)\s*(?:公里|千米)'), lambda m: f"{m.group(1)}km"),
+    (re.compile(r'(\d+(?:\.\d+)?)\s*米'), lambda m: f"{m.group(1)}m"),
     (re.compile(r'第(\d+)名'), lambda m: f"{m.group(1)}위"),
     (re.compile(r'(\d+)人份'), lambda m: f"{m.group(1)}인분"),
     (re.compile(r'(\d+)号楼'), lambda m: f"{m.group(1)}동"),
@@ -121,7 +140,7 @@ RULES = [
 
 # 음역(외래어 소리 옮기기)에 자주 쓰는 글자. 이런 글자가 사전 말 없이 3자 이상 이어지면 뜻 대신 중국어 발음 한글로 읽는다
 # (洪都拉斯 → 훙더우라쓰, 蒙布朗 → 멍부랑. 뜻으로 풀면 "큰 모두 당긴 사").
-TRANSLIT = set('阿埃艾安奥澳巴芭班邦保堡贝本比彼毕宾波伯博布查达代戴丹德迪蒂丁顿多厄恩尔法范菲费芬丰佛夫弗福盖甘冈戈哥格根古圭哈汉豪赫亨洪胡霍基吉加嘉贾杰卡凯坎康柯科克肯库夸奎昆拉莱兰朗劳勒雷蕾黎里利莉丽连列林琳隆卢鲁路伦罗洛玛迈麦曼梅门蒙米密摩莫墨姆穆纳娜奈内尼妮涅宁纽努诺欧帕潘佩彭皮普奇齐恰乔切琴丘萨塞桑瑟森莎尚舍施什斯丝松苏索塔泰坦汤唐特提图托瓦万旺威韦维魏温沃乌伍希锡夏谢辛休雅亚扬耶伊因英尤约泽扎詹兹佐俄都律勃艮第甸鲁蒂缇')
+TRANSLIT = set('阿埃艾奥澳巴芭班邦保堡贝本比彼毕宾波伯博布查达代戴丹德迪顿多厄恩尔法范菲费芬丰佛夫弗盖甘冈戈哥格根古圭哈汉豪赫亨洪胡霍基吉加嘉贾杰卡凯坎康柯科克肯库夸奎昆拉莱朗劳勒雷蕾黎里利莉丽连列琳隆卢鲁路伦罗洛玛迈麦曼蒙密摩莫墨姆穆纳娜奈内尼妮涅宁纽努诺欧帕潘佩彭皮普奇齐恰乔切琴丘萨塞桑瑟森莎尚舍施什斯丝苏索塔坦韦亚俄鲁')
 
 
 # 단어 안에서도 한 글자로 읽는 글자: 조리 동사·모양·기본 음식 (메뉴 이름은 'A炒B', 'A丁' 식의 조합)
@@ -184,6 +203,7 @@ def _label(dic, raw, use_zi):
     zrun = []            # 글자 뜻으로 읽는 중인 연속 글자
     used_zi = False
     zi_left = 3          # 한자음으로 읽을 수 있는 드문 글자 수
+    lit = 0              # 글자 뜻·발음으로 읽은 글자 수 (직역)
 
     def flush():
         nonlocal zrun
@@ -212,6 +232,10 @@ def _label(dic, raw, use_zi):
             m = re_.match(s, i)
             if not m:
                 continue
+            if re_ is CNUM:                      # 한자 숫자: 그보다 길거나 같은 사전 말(二十四节气·三十六味)이 있으면 사전 우선
+                w2 = longest(dic, s, i, 99, False, 2)
+                if w2 and len(w2[0]) >= m.end() - i:
+                    continue
             flush()
             if f == 'keep':
                 parts.append(m.group(0).replace('￥', '¥').replace(' ', '')); kinds.append(DICT)
@@ -235,7 +259,7 @@ def _label(dic, raw, use_zi):
             if j - i >= 3:                    # 음역어: 발음으로
                 flush()
                 parts.append(''.join(dic.sound.get(c) or dic.hanja.get(c, '') for c in s[i:j])); kinds.append(HANJA)
-                covered += j - i; cov_end = j; i = j
+                covered += j - i; cov_end = j; lit += j - i; i = j
                 continue
         hit = best(dic, s, i, use_zi)
         if hit:
@@ -249,10 +273,10 @@ def _label(dic, raw, use_zi):
                     strong += 1
             i += len(w); continue
         if use_zi and c in dic.zi:
-            zrun.append(c); covered += 1; cov_end = i + 1; used_zi = True
+            zrun.append(c); covered += 1; cov_end = i + 1; used_zi = True; lit += 1
             i += 1; continue
         if use_zi and (c in dic.hanja or c in dic.sound) and zi_left > 0:     # 뜻 표에도 없는 드문 글자: 한자음 (고유명사 읽듯). 줄당 2자까지
-            zrun.append(c); covered += 1; cov_end = i + 1; used_zi = True; zi_left -= 1
+            zrun.append(c); covered += 1; cov_end = i + 1; used_zi = True; zi_left -= 1; lit += 1
             i += 1; continue
         flush()
         i += 1   # 사전에 없는 한자: 건너뜀
@@ -262,7 +286,7 @@ def _label(dic, raw, use_zi):
         if not parts or covered < max(total - 1, 0.9 * total):
             return None
         kind = HANJA if kinds.count(HANJA) * 2 >= len(kinds) else (FOOD if FOOD in kinds else DICT)
-        return _join(parts), kind, covered, total
+        return _join(parts), kind, covered, total, lit
     if not parts or strong == 0:
         return None
     need = 0.75 if total > 12 else (0.5 if total <= 8 else 0.6)   # 짧은 메뉴 이름은 모르는 수식어 하나쯤 있어도 덮는다
@@ -273,7 +297,7 @@ def _label(dic, raw, use_zi):
         return None
     text = _join(parts)
     kind = FOOD if FOOD in kinds else DICT
-    return text, kind, covered, total
+    return text, kind, covered, total, 0
 
 
 def _join(parts):
@@ -302,3 +326,17 @@ def _label2(dic, raw):
         if z:
             return z[0], z[1]
     return (w[0], w[1]) if w else None
+
+
+def strict(dic, raw):
+    """엄격한 번역: 사전 항목(한 글자 음식어 포함)과 규칙만으로 한자를 전부 읽었나 — 글자 뜻·발음 직역이 하나도 없이. (라벨, 참/거짓)"""
+    raw = ''.join(dic.t2s.get(c, c) for c in raw)
+    s = raw.strip()
+    if not any(is_han(c) for c in s) or PRICE_START.match(s):
+        return None, True
+    total = sum(1 for c in s if is_han(c))
+    w = _label(dic, raw, False)
+    if w and w[2] >= total:
+        return w[0], True
+    z = _label(dic, raw, True)
+    return (z[0] if z else (w[0] if w else None)), bool(z and z[4] == 0 and z[2] >= total)

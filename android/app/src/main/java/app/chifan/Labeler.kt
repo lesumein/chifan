@@ -18,7 +18,17 @@ class Labeler(private val dict: Lexicon) {
     private class Rule(val re: Regex, val keep: Boolean = false, val f: ((MatchResult) -> String?)? = null)
     private fun r(p: String, f: (MatchResult) -> String?) = Rule(Regex(p), false, f)
     private fun keep(p: String) = Rule(Regex(p), true)
+    /** 한자 숫자 → 아라비아 숫자 (三十六 → 36) */
+    private val cnum = Regex("(?=[一二三四五六七八九两十百千]{2})[一二三四五六七八九两]?[十百千](?:[一二三四五六七八九两]?[十百])*[一二三四五六七八九]?")
+    private fun cnumValue(t: String): String {
+        val d = mapOf('零' to 0, '一' to 1, '二' to 2, '两' to 2, '三' to 3, '四' to 4, '五' to 5, '六' to 6, '七' to 7, '八' to 8, '九' to 9)
+        var total = 0; var cur = 0
+        for (c in t) { val v = d[c]; if (v != null) cur = v else { total += (if (cur == 0) 1 else cur) * when (c) { '十' -> 10; '百' -> 100; else -> 1000 }; cur = 0 } }
+        return (total + cur).toString()
+    }
+
     private val rules = listOf(
+        Rule(cnum, false) { m -> cnumValue(m.value) },
         r("(\\d+(?:\\.\\d+)?)折") { m -> zhe(m.groupValues[1]) },
         r("已减(\\d+(?:\\.\\d+)?)元") { m -> "¥${m.groupValues[1]} 할인됨" },
         r("已优惠[¥￥]?(\\d+(?:\\.\\d+)?)") { m -> "¥${m.groupValues[1]} 할인됨" },
@@ -63,6 +73,8 @@ class Labeler(private val dict: Lexicon) {
         r("预计\\s*(\\d+:\\d+)\\s*送达") { m -> "${m.groupValues[1]} 도착 예정" },
         r("距您\\s*(\\d+(?:\\.\\d+)?)\\s*km") { m -> "${m.groupValues[1]}km 거리" },
         r("(\\d+(?:\\.\\d+)?)\\s*km") { m -> "${m.groupValues[1]}km" },
+        r("(\\d+(?:\\.\\d+)?)\\s*(?:公里|千米)") { m -> "${m.groupValues[1]}km" },
+        r("(\\d+(?:\\.\\d+)?)\\s*米") { m -> "${m.groupValues[1]}m" },
         r("第(\\d+)名") { m -> "${m.groupValues[1]}위" },
         r("(\\d+)人份") { m -> "${m.groupValues[1]}인분" },
         r("(\\d+)号楼") { m -> "${m.groupValues[1]}동" },
@@ -140,6 +152,10 @@ class Labeler(private val dict: Lexicon) {
             for (rule in rules) {
                 val m = rule.re.find(s, i) ?: continue
                 if (m.range.first != i) continue
+                if (rule.re === cnum) {   // 한자 숫자: 그보다 길거나 같은 사전 말(二十四节气·三十六味)이 있으면 사전 우선
+                    val w2 = longest(s, i, 99, false, 2)
+                    if (w2 != null && w2.zh.length >= m.range.last + 1 - i) continue
+                }
                 flush()
                 if (rule.keep) { parts.add(m.value.replace("￥", "¥").replace(" ", "")); kinds.add(DICT) }
                 else {
@@ -207,7 +223,7 @@ class Labeler(private val dict: Lexicon) {
     private fun stripNote(ko: String) = ko.replace(Regex("\\s*[(（][^)）]*[)）]"), "").trim()
 
     /** 음역(외래어 소리 옮기기)에 자주 쓰는 글자. 사전 말 없이 3자 이상 이어지면 뜻 대신 중국어 발음 한글로 (洪都拉斯 → 훙더우라쓰) */
-    private val TRANSLIT = "丁万丘丝丰丹丽乌乔亚亨什代伊伍休伦伯佐佛佩俄保克兰兹内冈凯切列利加努劳勃勒博卡卢厄古吉哈哥唐嘉因图圭坎坦埃基堡塔塞墨夏多夫夸奇奈奎奥妮姆威娜宁安宾密尔尚尤尼巴布希帕库康弗彭彼律德恩恰戈戴扎托扬拉提摩斯施旺昆普曼朗本杰松林查柯根格桑梅森欧比毕汉汤沃法波泰泽洛洪涅温潘澳特玛班琳琴瑟瓦甘甸皮盖福科穆第米索约纳纽维缇罗耶肯胡舍艮艾芬芭苏英范莉莎莫莱菲萨蒂蒙蕾詹诺谢豪贝费贾赫路辛达迈连迪邦都里锡门阿隆雅雷霍韦顿魏鲁麦黎齐".toSet()
+    private val TRANSLIT = "丘丝丰丹丽乔亚亨什代伦伯佛佩俄保克内冈凯切列利加努劳勒博卡卢厄古吉哈哥嘉圭坎坦埃基堡塔塞墨多夫夸奇奈奎奥妮姆娜宁宾密尔尚尼巴布帕库康弗彭彼德恩恰戈戴拉摩斯施昆普曼朗本杰查柯根格桑森欧比毕汉法波洛洪涅潘澳玛班琳琴瑟甘皮盖科穆索纳纽罗肯胡舍艾芬芭苏范莉莎莫莱菲萨蒙蕾诺豪贝费贾赫路达迈连迪邦里阿隆雷霍韦顿鲁麦黎齐".toSet()
 
     /** 단어 안에서도 한 글자로 읽는 글자: 조리 동사·모양·기본 음식 (메뉴 이름은 'A炒B', 'A丁' 식의 조합) */
     private val BOUND = "派塔挞皮豆粽冰露盅果糖酥芹笋菇配小大酱盒夹团圆角馍菜藕花膏饮糊杯扒干醋茶汁奶冻鸡鸭鱼虾肉蛋粉鲜香嫩脆酥辣炒蒸炖煎烧拌煲焖炸烤卤爆煮炝熘涮焗烩酿熏丁丝片块条球卷段末泥饭面粥汤羹饼包糕".toSet()
